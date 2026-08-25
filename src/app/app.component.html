@@ -4,7 +4,7 @@
   <ng-container *ngIf="isLoggedIn">
     <!-- Beautiful romantic background hearts emitter -->
     <app-heart-emitter></app-heart-emitter>
-    
+
     <!-- WhatsApp-like chat layout workspace -->
     <app-messenger (onLogout)="handleLogout()"></app-messenger>
   </ng-container>
@@ -13,12 +13,12 @@
   <ng-container *ngIf="!isLoggedIn">
     <!-- Starfield background (WebGL) -->
     <app-galaxy></app-galaxy>
-    
+
     <!-- Glassmorphic Auth Form Container -->
     <div class="auth-card-container">
       <div class="card">
         <div class="card-inner">
-          
+
           <!-- FRONT SIDE (Revealed on Hover) -->
           <div class="card-front auth-card glass">
             <!-- Animated Border Beam Effect -->
@@ -32,7 +32,7 @@
               <!-- Interactive Particle Text Animation Canvas -->
               <div class="particle-stage">
                 <canvas #particleCanvas width="1000" height="300" class="particle-canvas"></canvas>
-                
+
                 <!-- Sparkles Core Animation and Gradients -->
                 <div class="sparkles-container">
                   <!-- Gradient Accents -->
@@ -42,11 +42,7 @@
                   <div class="sparkles-gradient-line-sky"></div>
 
                   <!-- Sparkles Core Particles -->
-                  <app-sparkles
-                    [minSize]="0.4"
-                    [maxSize]="1"
-                    [particleDensity]="1200"
-                    particleColor="#FFFFFF"
+                  <app-sparkles [minSize]="0.4" [maxSize]="1" [particleDensity]="1200" particleColor="#FFFFFF"
                     [speed]="1">
                   </app-sparkles>
                 </div>
@@ -57,108 +53,250 @@
 
 
 
-            <!-- Error & Success Notification Banners -->
+            <!-- Error, Success & Demo OTP Notification Banners -->
             <div class="alert alert-error" *ngIf="errorMessage">
               <span>⚠️</span> {{ errorMessage }}
             </div>
             <div class="alert alert-success" *ngIf="successMessage">
               <span>💖</span> {{ successMessage }}
             </div>
+            <div class="alert alert-info" *ngIf="demoOtpAlert">
+              <span>🔑</span> Demo OTP Code: <strong>{{ demoOtpAlert }}</strong>
+            </div>
 
-            <!-- 1. LOGIN FORM -->
-            <form (ngSubmit)="onLogin()" *ngIf="isLoginMode" class="auth-form">
-              <div class="input-group">
-                <label for="login-email">Email Address</label>
-                <input 
-                  type="email" 
-                  id="login-email" 
-                  name="loginEmail"
-                  placeholder="name@email.com" 
-                  [(ngModel)]="loginEmail" 
-                  required />
+            <!-- LOGIN MODE -->
+            <div *ngIf="isLoginMode" class="auth-section">
+              <!-- Login Mode Switcher Tabs -->
+              <div class="auth-subtabs">
+                <button type="button" [class.active]="loginSubMode === 'otp'" (click)="switchLoginSubMode('otp')">
+                  OTP Login
+                </button>
+                <button type="button" [class.active]="loginSubMode === 'email'" (click)="switchLoginSubMode('email')">
+                  ✉️ Email & Password
+                </button>
               </div>
 
-              <div class="input-group">
-                <label for="login-password">Password</label>
-                <input 
-                  type="password" 
-                  id="login-password" 
-                  name="loginPassword"
-                  placeholder="••••••••" 
-                  [(ngModel)]="loginPassword" 
-                  required />
-              </div>
+              <!-- 1A. Phone OTP Login Form -->
+              <form *ngIf="loginSubMode === 'otp'" (ngSubmit)="onLoginWithOtp()" class="auth-form">
+                <div class="input-group">
+                  <label for="login-phone">Phone Number</label>
+                  <div class="phone-input-row">
+                    <div class="country-picker-wrapper">
+                      <button type="button" class="country-picker-btn" (click)="toggleLoginCountryDropdown($event)"
+                        title="Select Country">
+                        <span class="flag-icon">{{ selectedLoginCountry.flag }}</span>
+                        <span class="country-dial-code">{{ selectedLoginCountry.dialCode }}</span>
+                        <span class="picker-caret">▾</span>
+                      </button>
+                      <div class="country-dropdown-menu" *ngIf="showLoginCountryDropdown"
+                        (click)="$event.stopPropagation()">
+                        <div class="country-search-header">
+                          <input type="text" placeholder="🔍 Search country..." [(ngModel)]="loginCountrySearch"
+                            [ngModelOptions]="{standalone: true}" (click)="$event.stopPropagation()" />
+                        </div>
+                        <div class="country-options-list">
+                          <div class="country-option-item" *ngFor="let country of filteredLoginCountries"
+                            (click)="selectLoginCountry(country)">
+                            <span class="option-flag">{{ country.flag }}</span>
+                            <span class="option-name">{{ country.name }}</span>
+                            <span class="option-dial">{{ country.dialCode }}</span>
+                          </div>
+                          <div class="country-no-match" *ngIf="filteredLoginCountries.length === 0">
+                            No country found
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
-              <button type="submit" class="btn-53"> 
-                <div class="original"> 
-                  <span class="grad">Login for love</span> 
-                </div> 
-                <div class="letters" aria-hidden="true"> 
-                  <span class="grad">W</span> 
-                  <span class="grad">e</span> 
-                  <span class="grad">l</span> 
-                  <span class="grad">c</span> 
-                  <span class="grad">o</span> 
-                  <span class="grad">m</span> 
-                  <span class="grad">e</span> 
-                  <span class="emoji">💞</span> 
-                </div> 
-              </button>
-            </form>
-
-            <!-- 2. REGISTRATION FORM -->
-            <form (ngSubmit)="onRegister()" *ngIf="!isLoginMode" class="auth-form">
-              <div class="input-group">
-                <label for="reg-name">Your Name</label>
-                <input 
-                  type="text" 
-                  id="reg-name" 
-                  name="registerName"
-                  placeholder="e.g. Emma" 
-                  [(ngModel)]="registerName" 
-                  required />
-              </div>
-
-              <div class="input-group">
-                <label for="reg-email">Email Address</label>
-                <input 
-                  type="email" 
-                  id="reg-email" 
-                  name="registerEmail"
-                  placeholder="name@email.com" 
-                  [(ngModel)]="registerEmail" 
-                  required />
-              </div>
-
-              <div class="input-group">
-                <label for="reg-password">Password</label>
-                <input 
-                  type="password" 
-                  id="reg-password" 
-                  name="registerPassword"
-                  placeholder="Create a password" 
-                  [(ngModel)]="registerPassword" 
-                  required />
-              </div>
-
-              <button type="submit" class="btn-53">
-                <div class="original">
-                  <span class="grad">Register</span>
+                    <input type="tel" id="login-phone" name="loginPhone" placeholder="555 0101" [(ngModel)]="loginPhone"
+                      (ngModelChange)="onLoginPhoneChange()" required />
+                    <button type="button" class="btn-inline-send" (click)="sendLoginOtp()" [disabled]="!loginPhone">
+                      Get OTP
+                    </button>
+                  </div>
                 </div>
-                <div class="letters" aria-hidden="true">
-                  <span class="grad">I love you</span><span class="emoji">🥀</span>
+
+                <div class="input-group" *ngIf="demoOtpAlert">
+                  <label for="login-otp">6-Digit Verification OTP</label>
+                  <input type="text" id="login-otp" name="loginOtp" placeholder="Enter 123456" [(ngModel)]="loginOtp"
+                    maxlength="6" required />
                 </div>
-              </button>
-            </form>
+
+                <div class="otp-actions-row" *ngIf="demoOtpAlert">
+                  <button type="button" class="btn-resend-otp" (click)="resendLoginOtp()"
+                    [disabled]="resendCountdown > 0">
+                    <span *ngIf="resendCountdown > 0">Resend OTP ({{ resendCountdown }}s)</span>
+                    <span *ngIf="resendCountdown === 0">🔄 Resend OTP</span>
+                  </button>
+                </div>
+
+                <button type="submit" class="btn-53" [disabled]="!loginOtp">
+                  <div class="original">
+                    <span class="grad">Login with OTP</span>
+                  </div>
+                  <div class="letters" aria-hidden="true">
+                    <span class="grad">W</span>
+                    <span class="grad">e</span>
+                    <span class="grad">l</span>
+                    <span class="grad">c</span>
+                    <span class="grad">o</span>
+                    <span class="grad">m</span>
+                    <span class="grad">e</span>
+                    <span class="emoji">💞</span>
+                  </div>
+                </button>
+              </form>
+
+              <!-- 1B. Email & Password Login Form -->
+              <form *ngIf="loginSubMode === 'email'" (ngSubmit)="onLogin()" class="auth-form">
+                <div class="input-group">
+                  <label for="login-email">Email Address or Phone</label>
+                  <input type="text" id="login-email" name="loginEmail" placeholder="name@email.com or +1 555 0101"
+                    [(ngModel)]="loginEmail" required />
+                </div>
+
+                <div class="input-group">
+                  <label for="login-password">Password</label>
+                  <input type="password" id="login-password" name="loginPassword" placeholder="••••••••"
+                    [(ngModel)]="loginPassword" required />
+                </div>
+
+                <button type="submit" class="btn-53">
+                  <div class="original">
+                    <span class="grad">Login for love</span>
+                  </div>
+                  <div class="letters" aria-hidden="true">
+                    <span class="grad">W</span>
+                    <span class="grad">e</span>
+                    <span class="grad">l</span>
+                    <span class="grad">c</span>
+                    <span class="grad">o</span>
+                    <span class="grad">m</span>
+                    <span class="grad">e</span>
+                    <span class="emoji">💞</span>
+                  </div>
+                </button>
+              </form>
+            </div>
+
+            <!-- REGISTRATION MODE (Multi-step Phone -> OTP -> Email/Password) -->
+            <div *ngIf="!isLoginMode" class="auth-section">
+              <div class="register-step-tracker">
+                <span [class.active]="registerStep >= 1">1. Phone</span>
+                <span class="step-divider">→</span>
+                <span [class.active]="registerStep >= 2">2. OTP</span>
+                <span class="step-divider">→</span>
+                <span [class.active]="registerStep === 3">3. Email & Password</span>
+              </div>
+
+              <!-- STEP 1: Enter Name & Phone -->
+              <form *ngIf="registerStep === 1" (ngSubmit)="sendRegisterOtp()" class="auth-form">
+                <div class="input-group">
+                  <label for="reg-name">Your Full Name</label>
+                  <input type="text" id="reg-name" name="registerName" placeholder="e.g. Emma"
+                    [(ngModel)]="registerName" required />
+                </div>
+
+                <div class="input-group">
+                  <label for="reg-phone">Phone Number</label>
+                  <div class="phone-input-row">
+                    <div class="country-picker-wrapper">
+                      <button type="button" class="country-picker-btn" (click)="toggleRegisterCountryDropdown($event)"
+                        title="Select Country">
+                        <span class="flag-icon">{{ selectedRegisterCountry.flag }}</span>
+                        <span class="country-dial-code">{{ selectedRegisterCountry.dialCode }}</span>
+                        <span class="picker-caret">▾</span>
+                      </button>
+                      <div class="country-dropdown-menu" *ngIf="showRegisterCountryDropdown"
+                        (click)="$event.stopPropagation()">
+                        <div class="country-search-header">
+                          <input type="text" placeholder="🔍 Search country..." [(ngModel)]="registerCountrySearch"
+                            [ngModelOptions]="{standalone: true}" (click)="$event.stopPropagation()" />
+                        </div>
+                        <div class="country-options-list">
+                          <div class="country-option-item" *ngFor="let country of filteredRegisterCountries"
+                            (click)="selectRegisterCountry(country)">
+                            <span class="option-flag">{{ country.flag }}</span>
+                            <span class="option-name">{{ country.name }}</span>
+                            <span class="option-dial">{{ country.dialCode }}</span>
+                          </div>
+                          <div class="country-no-match" *ngIf="filteredRegisterCountries.length === 0">
+                            No country found
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <input type="tel" id="reg-phone" name="registerPhone" placeholder="555 0199"
+                      [(ngModel)]="registerPhone" (ngModelChange)="onRegisterPhoneChange()" required />
+                  </div>
+                </div>
+
+                <button type="submit" class="btn-53" [disabled]="!registerName || !registerPhone">
+                  <div class="original">
+                    <span class="grad">Send Verification OTP</span>
+                  </div>
+                  <div class="letters" aria-hidden="true">
+                    <span class="grad">Verify</span><span class="emoji">📱</span>
+                  </div>
+                </button>
+              </form>
+
+              <!-- STEP 2: Enter OTP Code -->
+              <form *ngIf="registerStep === 2" (ngSubmit)="verifyRegisterOtp()" class="auth-form">
+                <div class="input-group">
+                  <label for="reg-otp">Enter 6-Digit OTP Code</label>
+                  <input type="text" id="reg-otp" name="registerOtp" placeholder="123456" [(ngModel)]="registerOtp"
+                    maxlength="6" required />
+                </div>
+
+                <button type="submit" class="btn-53" [disabled]="!registerOtp">
+                  <div class="original">
+                    <span class="grad">Verify OTP</span>
+                  </div>
+                  <div class="letters" aria-hidden="true">
+                    <span class="grad">Verified</span><span class="emoji">✨</span>
+                  </div>
+                </button>
+              </form>
+
+              <!-- STEP 3: Enter Optional Email Address & Set Password -->
+              <form *ngIf="registerStep === 3" (ngSubmit)="completeRegistration()" class="auth-form">
+                <div class="verified-badge-card">
+                  <span>✅ Phone Verified: <strong>{{ registerPhone }}</strong></span>
+                </div>
+
+                <div class="input-group">
+                  <label for="reg-email">Email Address (Optional)</label>
+                  <input type="email" id="reg-email" name="registerEmail" placeholder="name@email.com"
+                    [(ngModel)]="registerEmail" />
+                </div>
+
+                <div class="input-group">
+                  <label for="reg-password">Create Password (Optional)</label>
+                  <input type="password" id="reg-password" name="registerPassword"
+                    placeholder="Create a secure password" [(ngModel)]="registerPassword" />
+                </div>
+
+                <button type="submit" class="btn-53">
+                  <div class="original">
+                    <span class="grad">Complete Registration</span>
+                  </div>
+                  <div class="letters" aria-hidden="true">
+                    <span class="grad">Welcome!</span><span class="emoji">🥀</span>
+                  </div>
+                </button>
+              </form>
+            </div>
 
             <!-- Toggle Auth view -->
             <footer class="auth-footer">
               <p *ngIf="isLoginMode">
-                Don't have an account? 
-                <a (click)="toggleMode()">Register here</a>
+                Don't have an account?
+                <a (click)="toggleMode()">Register with Phone</a>
               </p>
               <p *ngIf="!isLoginMode">
-                Already registered? 
+                Already registered?
                 <a (click)="toggleMode()">Log in instead</a>
               </p>
             </footer>
@@ -172,11 +310,7 @@
             </div>
 
             <div class="card-back-image-wrapper">
-              <img 
-                src="assets/radha_krishna_card_back.jpg" 
-                alt="Radha Krishna Romantic Quote" 
-                class="card-back-img" 
-              />
+              <img src="assets/radha_krishna_card_back.jpg" alt="Radha Krishna Romantic Quote" class="card-back-img" />
             </div>
           </div>
 

@@ -1,5 +1,6 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { AuthService } from './services/auth.service';
+import { COUNTRY_CODES, CountryCode, findCountryByPhone } from './services/country-codes';
 
 class Particle {
   pos = { x: 0, y: 0 };
@@ -148,19 +149,109 @@ function drawHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: 
 export class AppComponent implements OnInit, OnDestroy {
   title = 'Romantic Messenger';
   isLoggedIn = false;
+  // Auth Mode Toggles & Fields
   isLoginMode = true; // toggles between Login and Register
+  loginSubMode: 'email' | 'otp' = 'otp'; // default to Phone OTP login for easy testing
 
-  // Form Fields
+  // Form Fields - Login
   loginEmail = '';
   loginPassword = '';
+  loginPhone = '';
+  loginOtp = '';
 
-  registerEmail = '';
+  // Form Fields - Register
+  registerStep: 1 | 2 | 3 = 1; // 1: Phone & Name, 2: OTP verification, 3: Email & Password
+  registerPhone = '';
   registerName = '';
+  registerOtp = '';
+  registerEmail = '';
   registerPassword = '';
+
+  // Country Flags & Dial Codes State
+  countryCodes = COUNTRY_CODES;
+  selectedLoginCountry: CountryCode = COUNTRY_CODES[0]; // default US
+  selectedRegisterCountry: CountryCode = COUNTRY_CODES[0]; // default US
+  showLoginCountryDropdown = false;
+  showRegisterCountryDropdown = false;
+  loginCountrySearch = '';
+  registerCountrySearch = '';
+
+  // Timer & Demo OTP State
+  resendCountdown = 0;
+  private resendTimerInterval: any;
+  demoOtpAlert = '';
 
   // Messages
   errorMessage = '';
   successMessage = '';
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.showLoginCountryDropdown = false;
+    this.showRegisterCountryDropdown = false;
+  }
+
+  get filteredLoginCountries(): CountryCode[] {
+    if (!this.loginCountrySearch.trim()) return this.countryCodes;
+    const q = this.loginCountrySearch.toLowerCase().trim();
+    return this.countryCodes.filter(
+      c => c.name.toLowerCase().includes(q) || c.dialCode.includes(q) || c.code.toLowerCase().includes(q)
+    );
+  }
+
+  get filteredRegisterCountries(): CountryCode[] {
+    if (!this.registerCountrySearch.trim()) return this.countryCodes;
+    const q = this.registerCountrySearch.toLowerCase().trim();
+    return this.countryCodes.filter(
+      c => c.name.toLowerCase().includes(q) || c.dialCode.includes(q) || c.code.toLowerCase().includes(q)
+    );
+  }
+
+  toggleLoginCountryDropdown(event: Event): void {
+    event.stopPropagation();
+    this.showLoginCountryDropdown = !this.showLoginCountryDropdown;
+    this.showRegisterCountryDropdown = false;
+    this.loginCountrySearch = '';
+  }
+
+  toggleRegisterCountryDropdown(event: Event): void {
+    event.stopPropagation();
+    this.showRegisterCountryDropdown = !this.showRegisterCountryDropdown;
+    this.showLoginCountryDropdown = false;
+    this.registerCountrySearch = '';
+  }
+
+  selectLoginCountry(country: CountryCode): void {
+    this.selectedLoginCountry = country;
+    this.showLoginCountryDropdown = false;
+    if (!this.loginPhone.startsWith(country.dialCode)) {
+      const cleanNumber = this.loginPhone.replace(/^\+\d+\s*/, '');
+      this.loginPhone = cleanNumber ? `${country.dialCode} ${cleanNumber}` : `${country.dialCode} `;
+    }
+  }
+
+  selectRegisterCountry(country: CountryCode): void {
+    this.selectedRegisterCountry = country;
+    this.showRegisterCountryDropdown = false;
+    if (!this.registerPhone.startsWith(country.dialCode)) {
+      const cleanNumber = this.registerPhone.replace(/^\+\d+\s*/, '');
+      this.registerPhone = cleanNumber ? `${country.dialCode} ${cleanNumber}` : `${country.dialCode} `;
+    }
+  }
+
+  onLoginPhoneChange(): void {
+    const match = findCountryByPhone(this.loginPhone);
+    if (match) {
+      this.selectedLoginCountry = match;
+    }
+  }
+
+  onRegisterPhoneChange(): void {
+    const match = findCountryByPhone(this.registerPhone);
+    if (match) {
+      this.selectedRegisterCountry = match;
+    }
+  }
 
   // Particle Animation variables
   private canvasRef?: ElementRef<HTMLCanvasElement>;
@@ -193,6 +284,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopParticleAnimation();
+    this.clearResendTimer();
   }
 
   updateLoginStatus(): void {
@@ -201,13 +293,36 @@ export class AppComponent implements OnInit, OnDestroy {
 
   toggleMode(): void {
     this.isLoginMode = !this.isLoginMode;
+    this.registerStep = 1;
     this.clearMessages();
   }
 
-  onLogin(): void {
+  switchLoginSubMode(mode: 'email' | 'otp'): void {
+    this.loginSubMode = mode;
     this.clearMessages();
-    const result = this.authService.login(this.loginEmail, this.loginPassword);
+  }
 
+  // --- OTP Login Handlers ---
+  sendLoginOtp(): void {
+    this.clearMessages();
+    const result = this.authService.sendLoginOtp(this.loginPhone);
+    if (result.success) {
+      this.successMessage = result.message;
+      this.demoOtpAlert = result.otp || '123456';
+      this.startResendTimer();
+    } else {
+      this.errorMessage = result.message;
+    }
+  }
+
+  resendLoginOtp(): void {
+    if (this.resendCountdown > 0) return;
+    this.sendLoginOtp();
+  }
+
+  onLoginWithOtp(): void {
+    this.clearMessages();
+    const result = this.authService.loginWithOtp(this.loginPhone, this.loginOtp);
     if (result.success) {
       this.isLoggedIn = true;
       this.clearFormFields();
@@ -216,22 +331,75 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  onRegister(): void {
+  startResendTimer(): void {
+    this.clearResendTimer();
+    this.resendCountdown = 20;
+    this.resendTimerInterval = setInterval(() => {
+      this.resendCountdown--;
+      if (this.resendCountdown <= 0) {
+        this.clearResendTimer();
+      }
+    }, 1000);
+  }
+
+  private clearResendTimer(): void {
+    if (this.resendTimerInterval) {
+      clearInterval(this.resendTimerInterval);
+      this.resendTimerInterval = null;
+    }
+    this.resendCountdown = 0;
+  }
+
+  // --- Registration Multi-step Handlers ---
+  sendRegisterOtp(): void {
     this.clearMessages();
-    const result = this.authService.register(
-      this.registerEmail,
+    const result = this.authService.sendRegistrationOtp(this.registerPhone);
+    if (result.success) {
+      this.successMessage = result.message;
+      this.demoOtpAlert = result.otp || '123456';
+      this.registerStep = 2;
+    } else {
+      this.errorMessage = result.message;
+    }
+  }
+
+  verifyRegisterOtp(): void {
+    this.clearMessages();
+    const result = this.authService.verifyRegistrationOtp(this.registerPhone, this.registerOtp);
+    if (result.success) {
+      this.successMessage = result.message;
+      this.registerStep = 3;
+    } else {
+      this.errorMessage = result.message;
+    }
+  }
+
+  completeRegistration(): void {
+    this.clearMessages();
+    const result = this.authService.completePhoneRegistration(
+      this.registerPhone,
       this.registerName,
+      this.registerEmail,
       this.registerPassword
     );
 
     if (result.success) {
       this.successMessage = result.message;
-      // Clear register fields and switch to login mode after successful signup
-      setTimeout(() => {
-        this.isLoginMode = true;
-        this.loginEmail = this.registerEmail;
-        this.clearFormFields();
-      }, 1500);
+      this.isLoggedIn = true;
+      this.clearFormFields();
+    } else {
+      this.errorMessage = result.message;
+    }
+  }
+
+  // --- Standard Email Login ---
+  onLogin(): void {
+    this.clearMessages();
+    const result = this.authService.login(this.loginEmail, this.loginPassword);
+
+    if (result.success) {
+      this.isLoggedIn = true;
+      this.clearFormFields();
     } else {
       this.errorMessage = result.message;
     }
@@ -245,13 +413,18 @@ export class AppComponent implements OnInit, OnDestroy {
   private clearMessages(): void {
     this.errorMessage = '';
     this.successMessage = '';
+    this.demoOtpAlert = '';
   }
 
   private clearFormFields(): void {
     this.loginPassword = '';
+    this.loginOtp = '';
     this.registerPassword = '';
     this.registerName = '';
     this.registerEmail = '';
+    this.registerOtp = '';
+    this.registerStep = 1;
+    this.clearResendTimer();
   }
 
   private initParticleAnimation(canvas: HTMLCanvasElement): void {
