@@ -1,95 +1,29 @@
-import { Component, OnInit, OnDestroy, Output, EventEmitter, HostListener } from '@angular/core';
-import { AuthService, UserSession, LinkedDevice, UserSong, UserRecord } from '../services/auth.service';
-import { ChatService, Contact, Message, StatusStory, CallLog, SharedMedia } from '../services/chat.service';
-import { COUNTRY_CODES, CountryCode, findCountryByPhone } from '../services/country-codes';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, NgZone, HostListener } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
+import { MessengerService } from './messenger.service';
+import { AuthService } from '../services/auth.service';
+import { Contact, Message, SharedMedia, User, CallState, LinkedDevice } from './messenger.model';
 
 @Component({
   selector: 'app-messenger',
   templateUrl: './messenger.component.html',
   styleUrls: ['./messenger.component.css']
 })
-export class MessengerComponent implements OnInit, OnDestroy {
-  @Output() onLogout = new EventEmitter<void>();
+export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('shaderCanvas', { static: false }) shaderCanvasRef!: ElementRef<HTMLCanvasElement>;
 
-  currentUser: UserSession | null = null;
+  currentUser!: User;
   contacts: Contact[] = [];
-  filteredContacts: Contact[] = [];
   selectedContact: Contact | null = null;
-  messages: Message[] = [];
-  statusStories: StatusStory[] = [];
-  callLogs: CallLog[] = [];
-  activeTyping: string | null = null;
+  activeMessages: Message[] = [];
+  sharedMedia: SharedMedia = { images: [], documents: [], links: [] };
+  typingStatus: { contactId: string; name: string } | null = null;
 
-  // Primary Navigation State
-  activeNavTab: 'chats' | 'status' | 'phone' | 'profile' = 'chats';
-
-  // Search & Invite State
-  searchQuery = '';
-  foundRegisteredUser: UserRecord | null = null;
-  showInviteOption = false;
-  unregisteredPhone = '';
-
-  // View & Modal Overlay States
-  activeStory: StatusStory | null = null;
-  storyProgress = 0;
-  private storyTimeout: any;
-  private storyInterval: any;
-
-  showAddContactModal = false;
-  newContactName = '';
-  newContactStatus = '';
-  newContactAvatar = '';
-  newContactPhone = '';
-
-  // Country Flags & Dial Codes State
-  countryCodes = COUNTRY_CODES;
-  selectedNewContactCountry: CountryCode = COUNTRY_CODES[0]; // default US
-  showNewContactCountryDropdown = false;
-  newContactCountrySearch = '';
-
-  @HostListener('document:click')
-  onDocumentClick(): void {
-    this.showNewContactCountryDropdown = false;
-  }
-
-  get filteredNewContactCountries(): CountryCode[] {
-    if (!this.newContactCountrySearch.trim()) return this.countryCodes;
-    const q = this.newContactCountrySearch.toLowerCase().trim();
-    return this.countryCodes.filter(
-      c => c.name.toLowerCase().includes(q) || c.dialCode.includes(q) || c.code.toLowerCase().includes(q)
-    );
-  }
-
-  toggleNewContactCountryDropdown(event: Event): void {
-    event.stopPropagation();
-    this.showNewContactCountryDropdown = !this.showNewContactCountryDropdown;
-    this.newContactCountrySearch = '';
-  }
-
-  selectNewContactCountry(country: CountryCode): void {
-    this.selectedNewContactCountry = country;
-    this.showNewContactCountryDropdown = false;
-    if (!this.newContactPhone.startsWith(country.dialCode)) {
-      const cleanNumber = this.newContactPhone.replace(/^\+\d+\s*/, '');
-      this.newContactPhone = cleanNumber ? `${country.dialCode} ${cleanNumber}` : `${country.dialCode} `;
-    }
-  }
-
-  onNewContactPhoneChange(): void {
-    const match = findCountryByPhone(this.newContactPhone);
-    if (match) {
-      this.selectedNewContactCountry = match;
-    }
-  }
-
-  // Shared Media Drawer State
-  showSharedMediaDrawer = false;
-  sharedMediaTab: 'links' | 'documents' | 'images' = 'images';
-  activeSharedMedia: SharedMedia = { links: [], documents: [], images: [] };
-
-  // Profile Image Full Lightbox Viewer State
-  lightboxImageUrl: string | null = null;
+  // View state toggles
+  showRightInfo = false;
+  showMobileChat = false;
+  showNewChatModal = false;
 
   // Settings & Linked Devices State
   showSettingsModal = false;
@@ -99,290 +33,183 @@ export class MessengerComponent implements OnInit, OnDestroy {
   qrCodeUrl = '';
   scannerSimulating = false;
 
-  // Profile Editing & Songs State
-  profileAvatarUrl = '';
-  profileStatusText = '';
-  newSongTitle = '';
-  newSongArtist = '';
-  playingSongId: string | null = null;
-
-  // Toast Notification
-  toastMessage = '';
+  // Toast message
+  toastMsg = '';
   private toastTimeout: any;
 
-  // Chat Input
-  newMessageText = '';
-  showAttachMenu = false;
-  sharedFiles: { name: string; type: string; url: string; size: string }[] = [];
+  // New Chat Form
+  newContactName = '';
+  newContactPhone = '';
+  newContactAbout = '';
 
-  // Simulated Calls State
-  activeCall: {
-    type: 'audio' | 'video';
-    status: 'ringing' | 'connected' | 'ended';
-    contactName: string;
-    contactAvatar: string;
-    duration: number;
-  } | null = null;
-
-  callDurationFormatted = '00:00';
+  // Active Call State Modal
+  activeCall: CallState | null = null;
+  callTimeFormatted = '00:00';
   private callInterval: any;
   private callRingTimeout: any;
 
-  private subscriptions: Subscription = new Subscription();
+  private subscriptions = new Subscription();
+  private animationFrameId?: number;
 
   constructor(
+    private messengerService: MessengerService,
     private authService: AuthService,
-    private chatService: ChatService
+    private router: Router,
+    private ngZone: NgZone
   ) {}
 
   ngOnInit(): void {
-    this.refreshData();
+    this.currentUser = this.messengerService.getCurrentUser();
+    this.contacts = this.messengerService.getContacts();
+    this.refreshSettingsData();
 
-    // Select first contact by default on desktop view
-    if (typeof window !== 'undefined' && window.innerWidth > 768 && this.contacts.length > 0) {
-      this.selectContact(this.contacts[0]);
-    }
+    // Subscribe to selected contact
+    this.subscriptions.add(
+      this.messengerService.getSelectedContact().subscribe(contact => {
+        this.selectedContact = contact;
+        if (contact) {
+          this.activeMessages = this.messengerService.getMessages(contact.id);
+          this.sharedMedia = this.messengerService.getSharedMedia(contact.id);
+        }
+      })
+    );
 
     // Subscribe to typing indicator
     this.subscriptions.add(
-      this.chatService.getActiveTyping().subscribe(name => {
-        this.activeTyping = name;
-        this.scrollToBottom();
+      this.messengerService.getTypingStatus().subscribe(status => {
+        this.typingStatus = status;
+        if (status && this.selectedContact?.id === status.contactId) {
+          this.activeMessages = this.messengerService.getMessages(status.contactId);
+        }
       })
     );
   }
 
-  ngOnDestroy(): void {
-    this.subscriptions.unsubscribe();
-    this.clearCallIntervals();
-    this.clearStoryIntervals();
-    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+  ngAfterViewInit(): void {
+    this.initWebGLShader();
   }
 
-  refreshData(): void {
-    this.currentUser = this.authService.getCurrentUser();
-    if (this.currentUser) {
-      this.profileAvatarUrl = this.currentUser.avatar;
-      this.profileStatusText = this.currentUser.statusText;
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
     }
-    this.contacts = this.chatService.getContacts();
-    this.filteredContacts = [...this.contacts];
-    this.statusStories = this.chatService.getStatusStories();
-    this.callLogs = this.chatService.getCallLogs();
+    this.clearCallTimers();
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    if (window.innerWidth > 768) {
+      this.showMobileChat = false;
+    }
+  }
+
+  refreshSettingsData(): void {
     this.linkedDevices = this.authService.getLinkedDevices();
   }
 
-  setNavTab(tab: 'chats' | 'status' | 'phone' | 'profile'): void {
-    this.activeNavTab = tab;
+  // --- Settings & Linked Devices ---
+  openSettings(section: 'linked' | 'scanner' | 'profile' | 'logout' = 'linked'): void {
+    this.settingsActiveSection = section;
+    this.showSettingsModal = true;
+    this.showAddDeviceQr = false;
+    this.refreshSettingsData();
+  }
+
+  closeSettings(): void {
     this.showSettingsModal = false;
-    this.refreshData();
+    this.showAddDeviceQr = false;
   }
 
-  // --- Contacts Search & Invite ---
-  onSearchChange(): void {
-    const q = this.searchQuery.trim().toLowerCase();
-    this.foundRegisteredUser = null;
-    this.showInviteOption = false;
-    this.unregisteredPhone = '';
-
-    if (!q) {
-      this.filteredContacts = [...this.contacts];
-      return;
-    }
-
-    // Filter existing contacts list
-    this.filteredContacts = this.contacts.filter(
-      c => c.name.toLowerCase().includes(q) || (c.phone && c.phone.toLowerCase().includes(q))
-    );
-
-    // If no existing contact matches and input resembles a phone number or name:
-    if (this.filteredContacts.length === 0) {
-      const isPhoneLike = /^[+0-9\s-]{4,}$/.test(q);
-      if (isPhoneLike) {
-        const found = this.authService.findUserByPhone(q);
-        if (found && found.id !== this.currentUser?.id) {
-          this.foundRegisteredUser = found;
-        } else {
-          this.showInviteOption = true;
-          this.unregisteredPhone = this.searchQuery.trim();
-        }
-      } else {
-        // Search all registered users by name
-        const allUsers = this.authService.getAllRegisteredUsers();
-        const foundUser = allUsers.find(
-          u => u.name.toLowerCase().includes(q) && u.id !== this.currentUser?.id
-        );
-        if (foundUser) {
-          this.foundRegisteredUser = foundUser;
-        }
-      }
-    }
+  logoutDevice(deviceId: string): void {
+    this.authService.logoutDevice(deviceId);
+    this.refreshSettingsData();
+    this.showToast('Device logged out successfully.');
   }
 
-  addRegisteredUser(user: UserRecord): void {
-    const newContact = this.chatService.addContactFromRegisteredUser(user);
-    this.refreshData();
-    this.searchQuery = '';
-    this.onSearchChange();
-    this.selectContact(newContact);
-    this.showToast(`Added ${user.name} to your contacts! 💖`);
+  generateAddDeviceQr(): void {
+    this.showAddDeviceQr = true;
+    this.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SanctuaryMessenger_AuthToken_${Date.now()}`;
   }
 
-  inviteContact(phone: string): void {
-    this.showToast(`📩 Invitation SMS sent to ${phone}! They will appear in Contacts once registered.`);
-    this.searchQuery = '';
-    this.onSearchChange();
+  simulateQrScan(): void {
+    this.scannerSimulating = true;
+    setTimeout(() => {
+      this.scannerSimulating = false;
+      const newDev = this.authService.addLinkedDevice('Scanned Mobile Tablet Session');
+      this.refreshSettingsData();
+      this.showToast(`✅ QR Scanner: Logged in device "${newDev.name}"!`);
+      this.settingsActiveSection = 'linked';
+    }, 1500);
   }
 
-  getTotalUnreadCount(): number {
-    return this.chatService.getTotalUnreadCount();
+  showToast(msg: string): void {
+    this.toastMsg = msg;
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = setTimeout(() => {
+      this.toastMsg = '';
+    }, 3500);
   }
 
-  // --- Profile Image Lightbox ---
-  openProfileImage(url?: string): void {
-    if (url) {
-      this.lightboxImageUrl = url;
-    }
+  // --- Chat Selection ---
+  onSelectContact(contact: Contact): void {
+    this.messengerService.selectContact(contact);
+    this.activeMessages = this.messengerService.getMessages(contact.id);
+    this.sharedMedia = this.messengerService.getSharedMedia(contact.id);
+    this.showMobileChat = true;
   }
 
-  closeProfileImage(): void {
-    this.lightboxImageUrl = null;
-  }
-
-  // --- Shared Media Drawer ---
-  openSharedMediaDrawer(): void {
+  onSendMessage(event: { text: string; attachment?: any }): void {
     if (!this.selectedContact) return;
-    this.activeSharedMedia = this.chatService.getSharedMedia(this.selectedContact.id);
-    this.showSharedMediaDrawer = true;
+    this.messengerService.sendMessage(this.selectedContact.id, event.text, event.attachment);
+    this.activeMessages = this.messengerService.getMessages(this.selectedContact.id);
+    this.sharedMedia = this.messengerService.getSharedMedia(this.selectedContact.id);
   }
 
-  closeSharedMediaDrawer(): void {
-    this.showSharedMediaDrawer = false;
+  toggleRightInfo(): void {
+    this.showRightInfo = !this.showRightInfo;
   }
 
-  // --- Contacts Management ---
-  selectContact(contact: Contact): void {
-    this.selectedContact = contact;
-    this.chatService.clearUnread(contact.id);
-    this.loadMessages();
-    this.scrollToBottom();
+  onBackToContacts(): void {
+    this.showMobileChat = false;
   }
 
-  deselectContact(): void {
-    this.selectedContact = null;
+  // --- New Chat Modal ---
+  openNewChatModal(): void {
+    this.showNewChatModal = true;
   }
 
-  addNewContact(): void {
-    if (!this.newContactName.trim()) return;
-
-    const contact = this.chatService.addContact(
-      this.newContactName,
-      this.newContactStatus,
-      this.newContactAvatar,
-      this.newContactPhone
-    );
-
-    this.refreshData();
-    this.selectContact(contact);
-
+  closeNewChatModal(): void {
+    this.showNewChatModal = false;
     this.newContactName = '';
-    this.newContactStatus = '';
-    this.newContactAvatar = '';
     this.newContactPhone = '';
-    this.showAddContactModal = false;
-    this.showToast('New partner added to Contacts! 🌹');
+    this.newContactAbout = '';
   }
 
-  loadMessages(): void {
-    if (this.selectedContact) {
-      this.messages = this.chatService.getMessages(this.selectedContact.id);
-      
-      this.sharedFiles = this.messages
-        .filter(m => m.file)
-        .map(m => ({
-          name: m.file!.name,
-          type: m.file!.type,
-          url: m.file!.url,
-          size: m.file!.size || '1.2 MB'
-        }));
-    }
+  createNewContact(): void {
+    if (!this.newContactName.trim()) return;
+    const newC = this.messengerService.addContact(
+      this.newContactName.trim(),
+      this.newContactPhone.trim(),
+      this.newContactAbout.trim()
+    );
+    this.contacts = this.messengerService.getContacts();
+    this.onSelectContact(newC);
+    this.closeNewChatModal();
   }
 
-  sendMessage(): void {
-    if (!this.newMessageText.trim() || !this.selectedContact) return;
-    
-    this.chatService.sendMessage(this.selectedContact.id, this.newMessageText);
-    this.newMessageText = '';
-    this.loadMessages();
-    this.scrollToBottom();
-  }
-
-  triggerAttachment(type: 'image' | 'audio' | 'file'): void {
+  // --- Simulated Voice & Video Calls ---
+  startCall(type: 'audio' | 'video'): void {
     if (!this.selectedContact) return;
-
-    let text = '';
-    let fileMeta: Message['file'];
-
-    if (type === 'image') {
-      fileMeta = {
-        name: 'Romantic Sunset.jpg',
-        type: 'image',
-        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&h=350&fit=crop',
-        size: '1.8 MB'
-      };
-      text = 'Sent a beautiful memory 🌅❤️';
-    } else if (type === 'audio') {
-      fileMeta = {
-        name: 'Our Love Theme.mp3',
-        type: 'audio',
-        url: '#',
-        size: '4.2 MB'
-      };
-      text = 'Shared a song for us 🎵💞';
-    } else {
-      fileMeta = {
-        name: 'Sweet Love Letter.pdf',
-        type: 'file',
-        url: '#',
-        size: '345 KB'
-      };
-      text = 'Wrote a sweet message for you 💌';
-    }
-
-    this.chatService.sendMessage(this.selectedContact.id, text, fileMeta);
-    this.showAttachMenu = false;
-    this.loadMessages();
-    this.scrollToBottom();
-  }
-
-  // --- Calls & Call History ---
-  startCall(type: 'audio' | 'video', contact?: Contact): void {
-    const targetContact = contact || this.selectedContact;
-    if (!targetContact) return;
-
-    this.clearCallIntervals();
+    this.clearCallTimers();
 
     this.activeCall = {
-      type,
+      type: type,
       status: 'ringing',
-      contactName: targetContact.name,
-      contactAvatar: targetContact.avatar,
+      contactName: this.selectedContact.name,
+      contactAvatar: this.selectedContact.avatar,
       duration: 0
     };
-
-    // Log the call in Call History
-    this.chatService.addCallLog({
-      contactId: targetContact.id,
-      contactName: targetContact.name,
-      contactAvatar: targetContact.avatar,
-      type: 'outgoing',
-      mode: type,
-      timestamp: new Date(),
-      timeStr: 'Just now',
-      duration: 0,
-      formattedDuration: '00:00'
-    });
-    this.callLogs = this.chatService.getCallLogs();
 
     this.callRingTimeout = setTimeout(() => {
       if (this.activeCall) {
@@ -392,18 +219,12 @@ export class MessengerComponent implements OnInit, OnDestroy {
     }, 2500);
   }
 
-  hangUp(): void {
+  endCall(): void {
     if (this.activeCall) {
-      // Update duration on the latest call log
-      if (this.callLogs.length > 0 && this.activeCall.duration > 0) {
-        const latest = this.callLogs[0];
-        latest.duration = this.activeCall.duration;
-        latest.formattedDuration = this.callDurationFormatted;
-      }
       this.activeCall.status = 'ended';
       setTimeout(() => {
         this.activeCall = null;
-        this.clearCallIntervals();
+        this.clearCallTimers();
       }, 1000);
     }
   }
@@ -414,132 +235,169 @@ export class MessengerComponent implements OnInit, OnDestroy {
         this.activeCall.duration++;
         const mins = Math.floor(this.activeCall.duration / 60);
         const secs = this.activeCall.duration % 60;
-        this.callDurationFormatted = 
-          `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        this.callTimeFormatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
       }
     }, 1000);
   }
 
-  private clearCallIntervals(): void {
+  private clearCallTimers(): void {
     if (this.callInterval) clearInterval(this.callInterval);
     if (this.callRingTimeout) clearTimeout(this.callRingTimeout);
-    this.callDurationFormatted = '00:00';
+    this.callTimeFormatted = '00:00';
   }
 
-  // --- WhatsApp Status view mode ---
-  viewStatus(story: StatusStory): void {
-    this.clearStoryIntervals();
-    this.activeStory = story;
-    this.storyProgress = 0;
-
-    this.storyInterval = setInterval(() => {
-      this.storyProgress += 2.5;
-      if (this.storyProgress >= 100) {
-        this.closeStory();
-      }
-    }, 100);
-  }
-
-  closeStory(): void {
-    this.activeStory = null;
-    this.clearStoryIntervals();
-  }
-
-  postNewStatus(): void {
-    const caption = prompt('Enter status text or memory quote:');
-    if (caption) {
-      const sampleMedia = 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=600&h=800&fit=crop';
-      this.chatService.addStatusStory(sampleMedia, caption);
-      this.statusStories = this.chatService.getStatusStories();
-      this.showToast('Status story published! 🌟');
-    }
-  }
-
-  private clearStoryIntervals(): void {
-    if (this.storyInterval) clearInterval(this.storyInterval);
-    this.storyProgress = 0;
-  }
-
-  // --- Settings & Linked Devices ---
-  openSettings(section: 'linked' | 'scanner' | 'profile' | 'logout' = 'linked'): void {
-    this.settingsActiveSection = section;
-    this.showSettingsModal = true;
-    this.linkedDevices = this.authService.getLinkedDevices();
-  }
-
-  closeSettings(): void {
-    this.showSettingsModal = false;
-    this.showAddDeviceQr = false;
-  }
-
-  logoutDevice(deviceId: string): void {
-    this.authService.logoutDevice(deviceId);
-    this.linkedDevices = this.authService.getLinkedDevices();
-    this.showToast('Device logged out successfully.');
-  }
-
-  generateAddDeviceQr(): void {
-    this.showAddDeviceQr = true;
-    this.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=RomanticMessenger_AuthToken_${Date.now()}`;
-  }
-
-  simulateQrScan(): void {
-    this.scannerSimulating = true;
-    setTimeout(() => {
-      this.scannerSimulating = false;
-      const newDev = this.authService.addLinkedDevice('Scanned Mobile Tablet Session');
-      this.linkedDevices = this.authService.getLinkedDevices();
-      this.showToast(`✅ QR Scanner: Logged in device "${newDev.name}"!`);
-      this.settingsActiveSection = 'linked';
-    }, 1500);
-  }
-
-  // --- Profile Customization & Favorite Songs ---
-  saveProfileChanges(): void {
-    this.authService.updateProfile(this.profileAvatarUrl, this.profileStatusText);
-    this.currentUser = this.authService.getCurrentUser();
-    this.showToast('Profile photo & status updated! 💖');
-  }
-
-  addFavoriteSong(): void {
-    if (!this.newSongTitle.trim() || !this.newSongArtist.trim()) return;
-    this.authService.addSongToProfile(this.newSongTitle.trim(), this.newSongArtist.trim());
-    this.currentUser = this.authService.getCurrentUser();
-    this.newSongTitle = '';
-    this.newSongArtist = '';
-    this.showToast('Added song to your Profile! 🎵');
-  }
-
-  togglePlaySong(songId: string): void {
-    if (this.playingSongId === songId) {
-      this.playingSongId = null;
-    } else {
-      this.playingSongId = songId;
-      this.showToast('Playing preview audio snippet 🎶');
-    }
-  }
-
-  // --- Toasts & Helpers ---
-  showToast(msg: string): void {
-    this.toastMessage = msg;
-    if (this.toastTimeout) clearTimeout(this.toastTimeout);
-    this.toastTimeout = setTimeout(() => {
-      this.toastMessage = '';
-    }, 3500);
-  }
-
-  logout(): void {
+  // --- Navigation & Logout ---
+  handleLogout(): void {
     this.authService.logout();
-    this.onLogout.emit();
+    this.router.navigate(['/']);
   }
 
-  private scrollToBottom(): void {
-    setTimeout(() => {
-      const feed = document.querySelector('.chat-messages');
-      if (feed) {
-        feed.scrollTop = feed.scrollHeight;
+  // --- WebGL Shader Animation Background ---
+  private initWebGLShader(): void {
+    if (!this.shaderCanvasRef) return;
+    const canvas = this.shaderCanvasRef.nativeElement;
+    const gl = canvas.getContext('webgl') || (canvas.getContext('experimental-webgl') as WebGLRenderingContext | null);
+    if (!gl) return;
+
+    const syncSize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    };
+
+    window.addEventListener('resize', syncSize);
+    syncSize();
+
+    const vs = `
+      attribute vec2 a_position;
+      varying vec2 v_texCoord;
+      void main() {
+        v_texCoord = a_position * 0.5 + 0.5;
+        gl_Position = vec4(a_position, 0.0, 1.0);
       }
-    }, 50);
+    `;
+
+    const fs = `
+      precision highp float;
+      varying vec2 v_texCoord;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+
+      float hash21(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      vec3 starLayer(vec2 uv, float scale, float time) {
+        vec3 col = vec3(0.0);
+        vec2 st = uv * scale;
+        vec2 id = floor(st);
+        vec2 gv = fract(st) - 0.5;
+
+        for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
+            vec2 offset = vec2(float(x), float(y));
+            float n = hash21(id + offset);
+            
+            // Random floating drift motion
+            vec2 p = vec2(hash21(id + offset + 1.0), hash21(id + offset + 2.0)) - 0.5;
+            p += 0.08 * vec2(sin(time * 0.5 + n * 6.28), cos(time * 0.4 + n * 6.28));
+            
+            float d = length(gv - offset - p);
+            
+            // Star size & twinkle brightness variation
+            float starSize = mix(0.015, 0.07, fract(n * 34.5));
+            float twinkle = 0.4 + 0.6 * sin(time * (1.5 + n * 3.5) + n * 12.0);
+            
+            // Smooth glowing star halo
+            float star = smoothstep(starSize, 0.0, d) * twinkle;
+            
+            // Subtle color tint: pure white to soft cyan/purple
+            vec3 starColor = mix(vec3(0.9, 0.95, 1.0), vec3(0.8, 0.7, 1.0), fract(n * 78.9));
+            col += star * starColor;
+          }
+        }
+        return col;
+      }
+
+      void main() {
+          vec2 uv = v_texCoord;
+          
+          vec3 color1 = vec3(0.02, 0.08, 0.14);
+          vec3 color2 = vec3(0.15, 0.05, 0.2);
+          
+          float pulse1 = 0.5 + 0.5 * sin(u_time * 0.4);
+          float pulse2 = 0.5 + 0.5 * cos(u_time * 0.3 + 1.5);
+          
+          float dist1 = distance(uv, vec2(0.2, 0.8) + 0.1 * vec2(sin(u_time * 0.2), cos(u_time * 0.25)));
+          float dist2 = distance(uv, vec2(0.8, 0.2) + 0.1 * vec2(cos(u_time * 0.3), sin(u_time * 0.2)));
+          
+          vec3 finalColor = mix(color1, color2, uv.y);
+          
+          finalColor += vec3(0.1, 0.05, 0.15) * (1.0 - smoothstep(0.0, 0.6, dist1)) * pulse1;
+          finalColor += vec3(0.15, 0.1, 0.2) * (1.0 - smoothstep(0.0, 0.7, dist2)) * pulse2;
+          
+          // Realistic multi-layered twinkling star field
+          vec3 stars = starLayer(uv, 32.0, u_time) * 0.85 + starLayer(uv + 0.35, 60.0, u_time * 0.8) * 0.55;
+          finalColor += stars;
+
+          gl_FragColor = vec4(finalColor, 1.0);
+      }
+    `;
+
+    const createShader = (type: number, src: string) => {
+      const s = gl.createShader(type);
+      if (!s) return null;
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    };
+
+    const vertShader = createShader(gl.VERTEX_SHADER, vs);
+    const fragShader = createShader(gl.FRAGMENT_SHADER, fs);
+    if (!vertShader || !fragShader) return;
+
+    const prog = gl.createProgram();
+    if (!prog) return;
+    gl.attachShader(prog, vertShader);
+    gl.attachShader(prog, fragShader);
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+    const pos = gl.getAttribLocation(prog, 'a_position');
+    gl.enableVertexAttribArray(pos);
+    gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+    const uTime = gl.getUniformLocation(prog, 'u_time');
+    const uRes = gl.getUniformLocation(prog, 'u_resolution');
+    const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+    let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+    const onMouseMove = (event: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width && rect.height) {
+        const nx = (event.clientX - rect.left) / rect.width;
+        const ny = 1.0 - (event.clientY - rect.top) / rect.height;
+        mouse.x = nx * canvas.width;
+        mouse.y = ny * canvas.height;
+      }
+    };
+    window.addEventListener('mousemove', onMouseMove);
+
+    this.ngZone.runOutsideAngular(() => {
+      const render = (t: number) => {
+        gl.uniform1f(uTime, t * 0.001);
+        gl.uniform2f(uRes, canvas.width, canvas.height);
+        if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        this.animationFrameId = requestAnimationFrame(render);
+      };
+      render(0);
+    });
   }
 }
-

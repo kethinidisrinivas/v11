@@ -5,17 +5,23 @@ import { FormsModule } from '@angular/forms';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { GalaxyComponent } from './galaxy/galaxy.component';
-import { MessengerComponent } from './messenger/messenger.component';
-import { HeartEmitterComponent } from './heart-emitter/heart-emitter.component';
 import { SparklesComponent } from './sparkles/sparkles.component';
+import { MessengerComponent } from './messenger/messenger.component';
+import { SidebarComponent } from './messenger/sidebar/sidebar.component';
+import { ChatWindowComponent } from './messenger/chat-window/chat-window.component';
+import { ContactInfoComponent } from './messenger/contact-info/contact-info.component';
+import { ProfileComponent } from './profile/profile.component';
 
 @NgModule({
   declarations: [
     AppComponent,
     GalaxyComponent,
+    SparklesComponent,
     MessengerComponent,
-    HeartEmitterComponent,
-    SparklesComponent
+    SidebarComponent,
+    ChatWindowComponent,
+    ContactInfoComponent,
+    ProfileComponent
   ],
   imports: [
     BrowserModule,

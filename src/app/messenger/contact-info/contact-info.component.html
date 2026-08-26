@@ -1,0 +1,134 @@
+<aside class="contact-info-container glass-card" *ngIf="contact">
+  <!-- Header -->
+  <div class="info-header">
+    <h3 class="info-title">Contact Info</h3>
+    <button type="button" class="btn-close-info" (click)="closeInfo.emit()">
+      <span class="material-icons-outlined">close</span>
+    </button>
+  </div>
+
+  <!-- Main Scrollable Body -->
+  <div class="info-body">
+    <!-- Big Profile Image & Bio -->
+    <div class="profile-section">
+      <div class="large-avatar-wrapper" (click)="openMediaLightbox(contact.avatar)" title="Click to view full image">
+        <img [src]="contact.avatar" [alt]="contact.name" class="large-avatar" />
+        <span class="status-indicator" [class.online]="contact.isOnline"></span>
+      </div>
+
+      <h2 class="profile-name">{{ contact.name }}</h2>
+      <p class="profile-phone" *ngIf="contact.phone">{{ contact.phone }}</p>
+
+      <div class="profile-actions-row">
+        <button type="button" class="btn-action-round" [class.active]="contact.isFavorite" (click)="onStarClick()" title="Favorite">
+          <span class="material-icons-outlined">{{ contact.isFavorite ? 'star' : 'star_border' }}</span>
+        </button>
+        <button type="button" class="btn-action-round" [class.active]="isMuted" (click)="toggleMute()" title="Mute Notifications">
+          <span class="material-icons-outlined">{{ isMuted ? 'notifications_off' : 'notifications' }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- About Section -->
+    <div class="info-card-block">
+      <h4 class="block-title">About & Status</h4>
+      <p class="about-text">{{ contact.about || contact.statusText }}</p>
+    </div>
+
+    <!-- Shared Media, Documents & Links Section -->
+    <div class="media-section">
+      <div class="media-tabs">
+        <button
+          type="button"
+          class="media-tab"
+          [class.active]="activeTab === 'media'"
+          (click)="setTab('media')"
+        >
+          🖼️ Photos ({{ sharedMedia.images.length }})
+        </button>
+        <button
+          type="button"
+          class="media-tab"
+          [class.active]="activeTab === 'docs'"
+          (click)="setTab('docs')"
+        >
+          📄 Files ({{ sharedMedia.documents.length }})
+        </button>
+        <button
+          type="button"
+          class="media-tab"
+          [class.active]="activeTab === 'links'"
+          (click)="setTab('links')"
+        >
+          🔗 Links ({{ sharedMedia.links.length }})
+        </button>
+      </div>
+
+      <!-- Photos Grid -->
+      <div class="media-grid" *ngIf="activeTab === 'media'">
+        <div
+          *ngFor="let img of sharedMedia.images"
+          class="media-grid-item"
+          (click)="openMediaLightbox(img.url)"
+        >
+          <img [src]="img.url" [alt]="img.title" class="grid-img" />
+        </div>
+        <div class="empty-media" *ngIf="sharedMedia.images.length === 0">
+          No photos shared yet
+        </div>
+      </div>
+
+      <!-- Documents List -->
+      <div class="docs-list" *ngIf="activeTab === 'docs'">
+        <div *ngFor="let doc of sharedMedia.documents" class="doc-item">
+          <span class="material-icons-outlined doc-icon">description</span>
+          <div class="doc-info">
+            <span class="doc-name">{{ doc.name }}</span>
+            <span class="doc-size">{{ doc.size }} • {{ doc.date }}</span>
+          </div>
+        </div>
+        <div class="empty-media" *ngIf="sharedMedia.documents.length === 0">
+          No files shared yet
+        </div>
+      </div>
+
+      <!-- Links List -->
+      <div class="links-list" *ngIf="activeTab === 'links'">
+        <a *ngFor="let link of sharedMedia.links" [href]="link.url" target="_blank" class="link-item">
+          <span class="material-icons-outlined link-icon">link</span>
+          <div class="link-info">
+            <span class="link-title">{{ link.title }}</span>
+            <span class="link-domain">{{ link.domain }} • {{ link.date }}</span>
+          </div>
+        </a>
+        <div class="empty-media" *ngIf="sharedMedia.links.length === 0">
+          No links shared yet
+        </div>
+      </div>
+    </div>
+
+    <!-- Options / Settings -->
+    <div class="options-block">
+      <button type="button" class="option-row" (click)="toggleMute()">
+        <span class="material-icons-outlined option-icon">notifications_none</span>
+        <span class="option-label">Mute Notifications</span>
+        <span class="toggle-switch" [class.on]="isMuted"></span>
+      </button>
+
+      <button type="button" class="option-row block-row" (click)="toggleBlock()">
+        <span class="material-icons-outlined option-icon icon-red">block</span>
+        <span class="option-label label-red">{{ isBlocked ? 'Unblock Contact' : 'Block Contact' }}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Media Lightbox -->
+  <div class="lightbox-overlay" *ngIf="lightboxUrl" (click)="closeMediaLightbox()">
+    <div class="lightbox-content" (click)="$event.stopPropagation()">
+      <img [src]="lightboxUrl" alt="Media Preview" class="lightbox-img" />
+      <button type="button" class="btn-close-lightbox" (click)="closeMediaLightbox()">
+        <span class="material-icons-outlined">close</span>
+      </button>
+    </div>
+  </div>
+</aside>

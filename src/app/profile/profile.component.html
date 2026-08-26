@@ -1,0 +1,172 @@
+<div class="profile-page-viewport">
+  <!-- WebGL Starfield Background Shader Canvas -->
+  <div id="profile-shader-container">
+    <canvas #profileShaderCanvas id="profile-shader-canvas"></canvas>
+  </div>
+
+  <!-- Hidden Native File Input for Photo Change -->
+  <input #photoInput type="file" accept="image/*" style="display: none" (change)="onPhotoSelected($event)" />
+
+  <!-- WhatsApp Centered Container -->
+  <div class="whatsapp-profile-card">
+    <!-- Top Header Bar -->
+    <header class="whatsapp-profile-header">
+      <button type="button" class="btn-header-back" (click)="goBack()" title="Back">
+        <span class="material-icons-outlined">arrow_back</span>
+      </button>
+      <h1 class="header-title">Profile</h1>
+    </header>
+
+    <!-- Scrollable Profile Body -->
+    <main class="profile-scroll-body">
+      <!-- Centered Avatar Photo Section -->
+      <section class="avatar-photo-section">
+        <div class="large-avatar-container" (click)="openPhotoOptions()">
+          <img [src]="currentUser?.avatar || defaultAvatar" [alt]="currentUser?.name" class="profile-large-avatar" />
+          <div class="camera-badge-overlay" title="Change or remove profile picture">
+            <span class="material-icons-outlined camera-icon">photo_camera</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 1. NAME SECTION -->
+      <section class="profile-info-block">
+        <div class="block-icon-wrapper">
+          <span class="material-icons-outlined block-icon">person</span>
+        </div>
+
+        <div class="block-content-col">
+          <label class="field-label-green">Name</label>
+
+          <!-- Display Mode -->
+          <div class="field-display-row" *ngIf="!isEditingName">
+            <span class="field-value-text">{{ currentUser?.name }}</span>
+            <button type="button" class="btn-edit-pencil" (click)="startEditingName()" title="Edit Name">
+              <span class="material-icons-outlined">edit</span>
+            </button>
+          </div>
+
+          <!-- Edit Mode -->
+          <div class="field-edit-row" *ngIf="isEditingName">
+            <input
+              type="text"
+              class="edit-input-field"
+              [(ngModel)]="tempName"
+              (keydown.enter)="saveName()"
+            />
+            <div class="edit-action-buttons">
+              <button type="button" class="btn-edit-action btn-cancel" (click)="cancelEditingName()" title="Cancel">
+                <span class="material-icons-outlined">close</span>
+              </button>
+              <button type="button" class="btn-edit-action btn-save" (click)="saveName()" [disabled]="!tempName.trim()" title="Save">
+                <span class="material-icons-outlined">check</span>
+              </button>
+            </div>
+          </div>
+
+          <p class="field-helper-text">This is not your username or pin. This name will be visible to your WhatsApp contacts.</p>
+        </div>
+      </section>
+
+      <div class="section-divider"></div>
+
+      <!-- 2. ABOUT SECTION -->
+      <section class="profile-info-block">
+        <div class="block-icon-wrapper">
+          <span class="material-icons-outlined block-icon">info</span>
+        </div>
+
+        <div class="block-content-col">
+          <label class="field-label-green">About</label>
+
+          <!-- Display Mode -->
+          <div class="field-display-row" *ngIf="!isEditingAbout">
+            <span class="field-value-text">{{ currentUser?.statusText || 'Hey there! I am using this app.' }}</span>
+            <button type="button" class="btn-edit-pencil" (click)="startEditingAbout()" title="Edit About">
+              <span class="material-icons-outlined">edit</span>
+            </button>
+          </div>
+
+          <!-- Edit Mode -->
+          <div class="field-edit-row" *ngIf="isEditingAbout">
+            <input
+              type="text"
+              class="edit-input-field"
+              [(ngModel)]="tempAbout"
+              (keydown.enter)="saveAbout()"
+            />
+            <div class="edit-action-buttons">
+              <button type="button" class="btn-edit-action btn-cancel" (click)="cancelEditingAbout()" title="Cancel">
+                <span class="material-icons-outlined">close</span>
+              </button>
+              <button type="button" class="btn-edit-action btn-save" (click)="saveAbout()" [disabled]="!tempAbout.trim()" title="Save">
+                <span class="material-icons-outlined">check</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-divider"></div>
+
+      <!-- 3. PHONE NUMBER SECTION -->
+      <section class="profile-info-block">
+        <div class="block-icon-wrapper">
+          <span class="material-icons-outlined block-icon">call</span>
+        </div>
+
+        <div class="block-content-col">
+          <label class="field-label-green">Phone number</label>
+          <div class="field-display-row">
+            <span class="field-value-text">{{ currentUser?.phone || '+1 (555) 0101' }}</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="section-divider"></div>
+
+      <!-- 4. PRIVACY & SECURITY OPTIONS -->
+      <section class="privacy-options-block">
+        <div class="privacy-option-item">
+          <span class="material-icons-outlined privacy-icon">lock</span>
+          <div class="privacy-text-meta">
+            <strong>Privacy</strong>
+            <span>Block contacts, disappearing messages</span>
+          </div>
+        </div>
+
+        <div class="privacy-option-item">
+          <span class="material-icons-outlined privacy-icon">shield</span>
+          <div class="privacy-text-meta">
+            <strong>Security</strong>
+            <span>Security notifications & 2-step verification</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Photo Options Action Sheet Modal -->
+    <div class="modal-overlay" *ngIf="showPhotoOptionsModal" (click)="closePhotoOptions()">
+      <div class="photo-options-sheet" (click)="$event.stopPropagation()">
+        <h3 class="sheet-title">Profile photo</h3>
+
+        <div class="sheet-actions">
+          <button type="button" class="sheet-action-item" (click)="triggerPhotoPicker()">
+            <span class="material-icons-outlined icon-green">photo_library</span>
+            <span>Change photo</span>
+          </button>
+
+          <button type="button" class="sheet-action-item red-action" (click)="removePhoto()">
+            <span class="material-icons-outlined icon-red">delete</span>
+            <span>Remove photo</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification Banner -->
+    <div class="toast-banner" *ngIf="toastMsg">
+      <span>{{ toastMsg }}</span>
+    </div>
+  </div>
+</div>

@@ -1,12 +1,8 @@
 <div class="app-viewport">
 
-  <!-- AUTHENTICATED STATE: Messenger & Heart Particles background -->
+  <!-- AUTHENTICATED STATE: Messenger Dashboard -->
   <ng-container *ngIf="isLoggedIn">
-    <!-- Beautiful romantic background hearts emitter -->
-    <app-heart-emitter></app-heart-emitter>
-
-    <!-- WhatsApp-like chat layout workspace -->
-    <app-messenger (onLogout)="handleLogout()"></app-messenger>
+    <router-outlet></router-outlet>
   </ng-container>
 
   <!-- UNAUTHENTICATED STATE: Login/Register overlaid on WebGL Starfield background -->

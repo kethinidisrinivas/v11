@@ -1,0 +1,201 @@
+<main class="chat-window-container">
+  <!-- Selected Contact Header -->
+  <header class="chat-header glass-header" *ngIf="contact">
+    <div class="header-left">
+      <!-- Mobile Back Button -->
+      <button type="button" class="btn-icon btn-mobile-back" (click)="backToContacts.emit()">
+        <span class="material-icons-outlined">arrow_back</span>
+      </button>
+
+      <div class="contact-profile-summary" (click)="toggleContactInfo.emit()">
+        <div class="header-avatar-wrapper">
+          <img [src]="contact.avatar" [alt]="contact.name" class="header-avatar" />
+          <span class="header-status-dot" [class.online]="contact.isOnline"></span>
+        </div>
+        <div class="header-details">
+          <h2 class="header-name">{{ contact.name }}</h2>
+          <div class="header-status">
+            <span *ngIf="typingStatus?.contactId === contact.id" class="typing-text animate-pulse">
+              {{ typingStatus?.name }} is typing something sweet...
+            </span>
+            <span *ngIf="typingStatus?.contactId !== contact.id" class="presence-text">
+              {{ contact.isOnline ? 'Active Now' : ('Last seen ' + (contact.lastSeen || 'recently')) }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn-icon" (click)="startCall.emit('audio')" title="Voice Call">
+        <span class="material-icons-outlined">call</span>
+      </button>
+      <button type="button" class="btn-icon" (click)="startCall.emit('video')" title="Video Call">
+        <span class="material-icons-outlined">videocam</span>
+      </button>
+      <button type="button" class="btn-icon" (click)="toggleContactInfo.emit()" title="Contact Info">
+        <span class="material-icons-outlined">info</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Empty Chat State when no contact selected -->
+  <div class="no-contact-selected" *ngIf="!contact">
+    <div class="sanctuary-empty-card glass-card">
+      <span class="material-icons-outlined empty-sanctuary-icon">auto_awesome</span>
+      <h2>Our Sanctuary Messenger</h2>
+      <p>Select a conversation from the sidebar to begin messaging.</p>
+    </div>
+  </div>
+
+  <!-- Messages Feed -->
+  <div class="messages-feed" #messagesFeed *ngIf="contact">
+    <!-- Date Separator Badge -->
+    <div class="date-separator">
+      <span class="date-badge">Today</span>
+    </div>
+
+    <!-- Message Bubbles -->
+    <div
+      *ngFor="let msg of messages"
+      class="message-row"
+      [class.sent-row]="msg.senderId === 'me'"
+      [class.received-row]="msg.senderId !== 'me'"
+    >
+      <div class="message-bubble-wrapper">
+        <!-- Message Bubble Body -->
+        <div class="message-bubble" [class.message-sent]="msg.senderId === 'me'" [class.message-received]="msg.senderId !== 'me'">
+          <!-- Image Attachment -->
+          <div *ngIf="msg.attachment?.type === 'image'" class="image-attachment-card" (click)="openLightbox(msg.attachment?.url)">
+            <img [src]="msg.attachment?.url" [alt]="msg.attachment?.name" class="attached-image" />
+          </div>
+
+          <!-- Document Attachment -->
+          <div *ngIf="msg.attachment?.type === 'file'" class="file-attachment-card">
+            <span class="material-icons-outlined file-icon">insert_drive_file</span>
+            <div class="file-meta">
+              <span class="file-name">{{ msg.attachment?.name }}</span>
+              <span class="file-size">{{ msg.attachment?.size || '1.2 MB' }}</span>
+            </div>
+            <span class="material-icons-outlined download-icon">download</span>
+          </div>
+
+          <!-- Voice Note Attachment -->
+          <div *ngIf="msg.attachment?.type === 'voice'" class="voice-attachment-card">
+            <button type="button" class="btn-play-voice">
+              <span class="material-icons-outlined">play_arrow</span>
+            </button>
+            <div class="voice-waveform">
+              <span class="wave-bar h-1"></span>
+              <span class="wave-bar h-3"></span>
+              <span class="wave-bar h-2"></span>
+              <span class="wave-bar h-4"></span>
+              <span class="wave-bar h-2"></span>
+              <span class="wave-bar h-3"></span>
+            </div>
+            <span class="voice-duration">{{ msg.attachment?.duration || '0:30' }}</span>
+          </div>
+
+          <!-- Message Text Content -->
+          <p class="message-text" *ngIf="msg.text">{{ msg.text }}</p>
+        </div>
+
+        <!-- Timestamp & Read Receipt -->
+        <div class="message-footer">
+          <span class="message-time">{{ msg.timeStr }}</span>
+          <span class="material-icons-outlined read-receipt" *ngIf="msg.senderId === 'me'">done_all</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dynamic Contact Typing Indicator Bubble -->
+    <div class="message-row received-row" *ngIf="typingStatus?.contactId === contact.id">
+      <div class="message-bubble message-received typing-sweet-bubble">
+        <span class="typing-sweet-content">
+          <span class="material-icons-outlined typing-heart-icon animate-pulse">favorite</span>
+          <span class="typing-sweet-text"><strong>{{ typingStatus?.name }}</strong> is typing something sweet</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Message Input Bar Footer -->
+  <footer class="chat-input-footer" *ngIf="contact">
+    <div class="input-bar-wrapper">
+      <!-- Actions Button -->
+      <button type="button" class="btn-input-action" (click)="toggleAttachMenu()" title="Attach File">
+        <span class="material-icons-outlined">add_circle_outline</span>
+      </button>
+
+      <!-- Text Field -->
+      <div class="text-input-container">
+        <textarea
+          class="chat-textarea"
+          placeholder="Whisper something..."
+          rows="1"
+          [(ngModel)]="newMessageText"
+          (keydown)="onKeyDown($event)"
+        ></textarea>
+
+        <!-- Emoji Trigger Button -->
+        <button type="button" class="btn-emoji-trigger" (click)="toggleEmojiPicker()" title="Add Emoji">
+          <span class="material-icons-outlined">sentiment_satisfied_alt</span>
+        </button>
+      </div>
+
+      <!-- Voice Recording / Mic Button -->
+      <button
+        type="button"
+        class="btn-input-action btn-mic"
+        [class.recording]="isRecordingVoice"
+        (click)="toggleVoiceRecording()"
+        [title]="isRecordingVoice ? 'Stop & Send Voice Note' : 'Record Voice Note'"
+      >
+        <span class="material-icons-outlined">{{ isRecordingVoice ? 'stop' : 'mic' }}</span>
+        <span class="recording-badge" *ngIf="isRecordingVoice">0:0{{ recordingSeconds }}</span>
+      </button>
+
+      <!-- Send Button -->
+      <button type="button" class="btn-send" (click)="onSend()" [disabled]="!newMessageText.trim()">
+        <span class="material-icons-outlined">favorite</span>
+      </button>
+    </div>
+
+    <!-- Attachment Menu Popover -->
+    <div class="popover-menu attach-menu" *ngIf="showAttachMenu">
+      <button type="button" class="popover-item" (click)="sendImageAttachment()">
+        <span class="material-icons-outlined item-icon icon-purple">image</span>
+        <span>Photos & Videos</span>
+      </button>
+      <button type="button" class="popover-item" (click)="sendFileAttachment()">
+        <span class="material-icons-outlined item-icon icon-blue">description</span>
+        <span>Document / PDF</span>
+      </button>
+      <button type="button" class="popover-item" (click)="toggleVoiceRecording()">
+        <span class="material-icons-outlined item-icon icon-pink">mic</span>
+        <span>Voice Note</span>
+      </button>
+    </div>
+
+    <!-- Emoji Picker Popover -->
+    <div class="popover-menu emoji-picker-menu" *ngIf="showEmojiPicker">
+      <div class="emoji-grid">
+        <span
+          *ngFor="let emoji of emojiList"
+          class="emoji-item"
+          (click)="addEmoji(emoji)"
+        >{{ emoji }}</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Profile Image Lightbox Overlay -->
+  <div class="lightbox-overlay" *ngIf="lightboxImageUrl" (click)="closeLightbox()">
+    <div class="lightbox-content" (click)="$event.stopPropagation()">
+      <img [src]="lightboxImageUrl" alt="Full Image Preview" class="lightbox-img" />
+      <button type="button" class="btn-close-lightbox" (click)="closeLightbox()">
+        <span class="material-icons-outlined">close</span>
+      </button>
+    </div>
+  </div>
+</main>

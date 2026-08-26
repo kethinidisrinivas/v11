@@ -1,4 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { AuthService } from './services/auth.service';
 import { COUNTRY_CODES, CountryCode, findCountryByPhone } from './services/country-codes';
 
@@ -276,13 +278,23 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  constructor(private authService: AuthService) { }
+  private authSub?: Subscription;
+
+  constructor(private authService: AuthService, private router: Router) { }
 
   ngOnInit(): void {
-    this.updateLoginStatus();
+    this.authSub = this.authService.isLoggedIn$.subscribe(loggedIn => {
+      this.isLoggedIn = loggedIn;
+      if (loggedIn) {
+        this.router.navigate(['/messenger']);
+      } else {
+        this.router.navigate(['/']);
+      }
+    });
   }
 
   ngOnDestroy(): void {
+    if (this.authSub) this.authSub.unsubscribe();
     this.stopParticleAnimation();
     this.clearResendTimer();
   }
@@ -326,6 +338,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (result.success) {
       this.isLoggedIn = true;
       this.clearFormFields();
+      this.router.navigate(['/messenger']);
     } else {
       this.errorMessage = result.message;
     }
@@ -387,6 +400,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.successMessage = result.message;
       this.isLoggedIn = true;
       this.clearFormFields();
+      this.router.navigate(['/messenger']);
     } else {
       this.errorMessage = result.message;
     }
@@ -400,6 +414,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (result.success) {
       this.isLoggedIn = true;
       this.clearFormFields();
+      this.router.navigate(['/messenger']);
     } else {
       this.errorMessage = result.message;
     }
@@ -408,6 +423,7 @@ export class AppComponent implements OnInit, OnDestroy {
   handleLogout(): void {
     this.isLoggedIn = false;
     this.clearMessages();
+    this.router.navigate(['/']);
   }
 
   private clearMessages(): void {

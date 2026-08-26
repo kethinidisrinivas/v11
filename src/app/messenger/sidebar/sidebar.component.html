@@ -1,0 +1,526 @@
+<aside class="sidebar-container glass-card">
+  <!-- Hidden Native Device Gallery File Input -->
+  <input #galleryInput type="file" accept="image/*,video/*" style="display: none" (change)="onGalleryFileSelected($event)" />
+
+  <!-- Top Profile Header & Navbar -->
+  <div class="sidebar-header">
+    <div class="user-profile-badge">
+      <div class="avatar-wrapper">
+        <img [src]="currentUser.avatar" [alt]="currentUser.name" class="user-avatar" />
+        <span class="online-indicator"></span>
+      </div>
+      <div class="user-info">
+        <h2 class="user-name">{{ currentUser.name }}</h2>
+        <div class="connection-status">
+          <span class="status-dot animate-pulse"></span>
+          <span class="status-label">CONNECTED</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-nav-actions">
+      <button type="button" class="btn-icon" (click)="setNavTab('chats')" title="Home / Chats">
+        <span class="material-icons-outlined">home</span>
+      </button>
+      <button type="button" class="btn-icon" (click)="openSettings.emit('linked')" title="Settings">
+        <span class="material-icons-outlined">settings</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Contacts Search Input Bar -->
+  <div class="search-bar-wrapper">
+    <div class="search-input-group">
+      <span class="material-icons-outlined search-icon">search</span>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Search contacts or phone..."
+        [(ngModel)]="searchQuery"
+        (ngModelChange)="onSearchChange()"
+      />
+      <button *ngIf="searchQuery" (click)="searchQuery = ''; onSearchChange()" class="btn-clear-search">
+        <span class="material-icons-outlined">close</span>
+      </button>
+    </div>
+
+    <!-- Registered User Found Search Card -->
+    <div class="search-result-banner registered-user-banner" *ngIf="foundRegisteredUser">
+      <div class="found-user-info">
+        <span class="material-icons-outlined banner-icon">verified_user</span>
+        <div>
+          <strong class="found-name">{{ foundRegisteredUser.name }}</strong>
+          <span class="found-phone">{{ foundRegisteredUser.phone }}</span>
+        </div>
+      </div>
+      <button type="button" class="btn-add-found-user" (click)="addRegisteredUser(foundRegisteredUser)">
+        ➕ Add Contact
+      </button>
+    </div>
+
+    <!-- Unregistered Phone Invite Banner -->
+    <div class="search-result-banner sms-invite-banner" *ngIf="showInviteOption">
+      <div class="found-user-info">
+        <span class="material-icons-outlined banner-icon">person_add_alt_1</span>
+        <div>
+          <strong class="found-name">Unregistered Number</strong>
+          <span class="found-phone">{{ searchQuery }}</span>
+        </div>
+      </div>
+      <button type="button" class="btn-sms-invite" (click)="sendSmsInvite()">
+        📩 Invite via SMS
+      </button>
+    </div>
+  </div>
+
+  <!-- TAB 1: MESSAGES / CHATS VIEW -->
+  <div class="tab-content-container" *ngIf="activeNavTab === 'chats'">
+    <div class="contacts-list">
+      <div
+        *ngFor="let contact of filteredContactsList()"
+        class="contact-card"
+        [class.active]="selectedContact?.id === contact.id"
+        (click)="selectContact.emit(contact)"
+      >
+        <div class="contact-avatar-wrapper">
+          <img [src]="contact.avatar" [alt]="contact.name" class="contact-avatar" />
+          <span class="status-badge" [class.online]="contact.isOnline"></span>
+        </div>
+
+        <div class="contact-details">
+          <div class="contact-top-row">
+            <h3 class="contact-name">{{ contact.name }}</h3>
+            <span class="contact-time" *ngIf="contact.lastSeen || contact.isOnline">
+              {{ contact.isOnline ? 'Online' : contact.lastSeen }}
+            </span>
+          </div>
+
+          <div class="contact-bottom-row">
+            <p class="contact-status-preview">{{ contact.statusText }}</p>
+            <span class="unread-count" *ngIf="contact.unreadCount > 0">
+              {{ contact.unreadCount }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty-contacts" *ngIf="filteredContactsList().length === 0 && !foundRegisteredUser && !showInviteOption">
+        <span class="material-icons-outlined empty-icon">search_off</span>
+        <p>No conversations found</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: WHATSAPP-STYLE STATUS VIEW -->
+  <div class="tab-content-container" *ngIf="activeNavTab === 'status'">
+    <div class="status-section">
+      <!-- My Status Item -->
+      <div class="status-card-row" (click)="myStatusGroup && myStatusGroup.items.length > 0 ? openStatusGroup(myStatusGroup) : openStatusSourcePicker()">
+        <div class="status-ring-wrapper" [class.has-ring]="myStatusGroup && myStatusGroup.items.length > 0" [class.my-ring]="myStatusGroup && myStatusGroup.items.length > 0">
+          <img [src]="currentUser.avatar" alt="My Status" class="status-avatar" />
+          <span class="add-status-badge">+</span>
+        </div>
+        <div class="status-info-col">
+          <h4 class="status-title-text">My Status</h4>
+          <span class="status-subtitle-text">
+            {{ (myStatusGroup && myStatusGroup.items.length > 0) ? myStatusGroup.lastUpdated + ' • ' + myStatusGroup.items.length + ' stories' : 'Tap to add status update' }}
+          </span>
+        </div>
+        <div class="status-actions-mini">
+          <button type="button" class="btn-mini-status" (click)="$event.stopPropagation(); triggerGalleryPicker()" title="Choose Photo/Video from Mobile Gallery">
+            <span class="material-icons-outlined">photo_library</span>
+          </button>
+          <button type="button" class="btn-mini-status" (click)="$event.stopPropagation(); openTextModal()" title="Create Text Status">
+            <span class="material-icons-outlined">edit</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent Updates (Unseen Green Rings) -->
+      <div class="status-divider-label" *ngIf="recentStatusGroups.length > 0">Recent updates</div>
+      <div class="status-list-group">
+        <div *ngFor="let group of recentStatusGroups" class="status-card-row" (click)="openStatusGroup(group)">
+          <div class="status-ring-wrapper unseen-ring">
+            <img [src]="group.contactAvatar" [alt]="group.contactName" class="status-avatar" />
+          </div>
+          <div class="status-info-col">
+            <h4 class="status-title-text">{{ group.contactName }}</h4>
+            <span class="status-subtitle-text">{{ group.lastUpdated }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Viewed Updates (Seen Gray Rings) -->
+      <div class="status-divider-label" *ngIf="viewedStatusGroups.length > 0">Viewed updates</div>
+      <div class="status-list-group">
+        <div *ngFor="let group of viewedStatusGroups" class="status-card-row" (click)="openStatusGroup(group)">
+          <div class="status-ring-wrapper viewed-ring">
+            <img [src]="group.contactAvatar" [alt]="group.contactName" class="status-avatar" />
+          </div>
+          <div class="status-info-col">
+            <h4 class="status-title-text">{{ group.contactName }}</h4>
+            <span class="status-subtitle-text">{{ group.lastUpdated }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: PHONE / CALL HISTORY VIEW -->
+  <div class="tab-content-container" *ngIf="activeNavTab === 'phone'">
+    <div class="calls-section">
+      <div class="calls-header-title">Call History & Logs</div>
+
+      <div class="call-logs-list">
+        <div *ngFor="let call of callLogs" class="call-log-item">
+          <div class="call-avatar-wrapper">
+            <img [src]="call.contactAvatar" [alt]="call.contactName" class="call-avatar" />
+          </div>
+
+          <div class="call-log-meta">
+            <h4 class="call-contact-name">{{ call.contactName }}</h4>
+            <div class="call-details-row">
+              <span class="material-icons-outlined call-type-icon" [class.incoming]="call.type==='incoming'" [class.outgoing]="call.type==='outgoing'" [class.missed]="call.type==='missed'">
+                {{ call.type === 'incoming' ? 'call_received' : (call.type === 'outgoing' ? 'call_made' : 'call_missed') }}
+              </span>
+              <span class="call-timestamp">{{ call.timeStr }}</span>
+            </div>
+          </div>
+
+          <div class="call-duration-badge">
+            <span class="material-icons-outlined duration-icon">{{ call.mode === 'video' ? 'videocam' : 'phone' }}</span>
+            <span>{{ call.formattedDuration }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: PROFILE CUSTOMIZATION VIEW -->
+  <div class="tab-content-container" *ngIf="activeNavTab === 'profile'">
+    <div class="profile-customization-section">
+      <div class="profile-header-card">
+        <img [src]="profileAvatarUrl || currentUser.avatar" alt="Profile Photo" class="profile-preview-avatar" />
+        <h3 class="profile-username">{{ currentUser.name }}</h3>
+        <span class="profile-phone-tag">{{ currentUser.phone || '+1 555 0101' }}</span>
+      </div>
+
+      <div class="profile-form-block">
+        <label class="form-label">Profile Photo URL</label>
+        <input type="text" [(ngModel)]="profileAvatarUrl" placeholder="https://image-link.jpg" class="profile-input" />
+
+        <label class="form-label">Status Quote</label>
+        <input type="text" [(ngModel)]="profileStatusText" placeholder="Living in a world of love & stars ✨" class="profile-input" />
+
+        <button type="button" class="btn-save-profile" (click)="saveProfileChanges()">
+          💖 Save Profile Changes
+        </button>
+      </div>
+
+      <!-- Favorite Songs Section -->
+      <div class="profile-songs-block">
+        <h4 class="songs-section-title">🎵 Profile Favorite Songs</h4>
+
+        <div class="add-song-inputs">
+          <input type="text" [(ngModel)]="newSongTitle" placeholder="Song Title (e.g. Starry Serenade)" class="profile-input" />
+          <input type="text" [(ngModel)]="newSongArtist" placeholder="Artist (e.g. Acoustic Hearts)" class="profile-input" />
+          <button type="button" class="btn-add-song" (click)="addFavoriteSong()" [disabled]="!newSongTitle || !newSongArtist">
+            ➕ Add Song to Profile
+          </button>
+        </div>
+
+        <div class="songs-list">
+          <div *ngFor="let song of currentUser.songs" class="song-item-card">
+            <button type="button" class="btn-play-song" (click)="togglePlaySong(song.id)">
+              <span class="material-icons-outlined">{{ playingSongId === song.id ? 'pause' : 'play_arrow' }}</span>
+            </button>
+            <div class="song-meta">
+              <span class="song-title">{{ song.title }}</span>
+              <span class="song-artist">{{ song.artist }} • {{ song.duration }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Navigation Bar -->
+  <footer class="sidebar-footer-nav">
+    <button type="button" class="footer-nav-item" [class.active]="activeNavTab === 'chats'" (click)="setNavTab('chats')">
+      <span class="material-icons-outlined">chat_bubble</span>
+      <span>Contacts</span>
+    </button>
+    <button type="button" class="footer-nav-item" [class.active]="activeNavTab === 'status'" (click)="setNavTab('status')">
+      <span class="material-icons-outlined">auto_awesome</span>
+      <span>Status</span>
+    </button>
+    <button type="button" class="footer-nav-item" [class.active]="activeNavTab === 'phone'" (click)="setNavTab('phone')">
+      <span class="material-icons-outlined">phone</span>
+      <span>Phone</span>
+    </button>
+    <button type="button" class="footer-nav-item" [class.active]="activeNavTab === 'profile'" (click)="setNavTab('profile')">
+      <span class="material-icons-outlined">person</span>
+      <span>Profile</span>
+    </button>
+  </footer>
+
+  <!-- Toast Notification Overlay -->
+  <div class="toast-banner" *ngIf="toastMessage">
+    <span>✨ {{ toastMessage }}</span>
+  </div>
+
+  <!-- STATUS SOURCE PICKER DIALOG -->
+  <div class="modal-overlay" *ngIf="showStatusSourcePicker" (click)="closeStatusSourcePicker()">
+    <div class="modal-card glass-card source-picker-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>🟢 Add New Status</h3>
+        <button type="button" class="btn-close-modal" (click)="closeStatusSourcePicker()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="source-picker-options">
+        <button type="button" class="source-option-item" (click)="triggerGalleryPicker()">
+          <span class="material-icons-outlined option-icon-green">photo_library</span>
+          <div class="option-text-meta">
+            <strong>Mobile Gallery</strong>
+            <span>Choose photo or video from device</span>
+          </div>
+        </button>
+
+        <button type="button" class="source-option-item" (click)="openTextModal()">
+          <span class="material-icons-outlined option-icon-purple">edit</span>
+          <div class="option-text-meta">
+            <strong>Text Status</strong>
+            <span>Type colored quote or message</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WHATSAPP FULL-SCREEN MEDIA STATUS EDITOR MODAL -->
+  <div class="whatsapp-media-editor-overlay" *ngIf="showMediaEditorModal">
+    <div class="media-editor-viewport">
+      <!-- Top Editor Toolbar -->
+      <header class="editor-header-toolbar">
+        <button type="button" class="btn-editor-tool" (click)="closeMediaEditor()" title="Cancel">
+          <span class="material-icons-outlined">close</span>
+        </button>
+
+        <div class="editor-tools-right">
+          <button type="button" class="btn-editor-tool" (click)="rotateMedia()" title="Rotate 90°">
+            <span class="material-icons-outlined">rotate_right</span>
+          </button>
+          <button type="button" class="btn-editor-tool" [class.active]="isDoodlingMode" (click)="toggleDoodleMode()" title="Doodle / Draw">
+            <span class="material-icons-outlined">brush</span>
+          </button>
+          <button type="button" class="btn-editor-tool" [class.active]="showTextOverlayInput" (click)="toggleTextOverlayInput()" title="Text Overlay">
+            <span class="material-icons-outlined">title</span>
+          </button>
+          <button type="button" class="btn-editor-tool" (click)="clearDoodle()" title="Clear Doodle">
+            <span class="material-icons-outlined">cleaning_services</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Color Palette Bar for Doodle Pencil -->
+      <div class="doodle-palette-bar" *ngIf="isDoodlingMode">
+        <button
+          *ngFor="let c of doodleColors"
+          type="button"
+          class="doodle-color-dot"
+          [style.background]="c"
+          [class.active]="doodleColor === c"
+          (click)="doodleColor = c"
+        ></button>
+      </div>
+
+      <!-- Text Overlay Input Floating Box -->
+      <div class="text-overlay-floating-input" *ngIf="showTextOverlayInput">
+        <input
+          type="text"
+          class="floating-text-input"
+          placeholder="Type text overlay..."
+          [(ngModel)]="textOverlayText"
+        />
+        <button type="button" class="btn-close-floating-text" (click)="showTextOverlayInput = false">Done</button>
+      </div>
+
+      <!-- Main Editor Canvas & Transform Box -->
+      <div class="media-canvas-stage">
+        <div class="media-rotate-container" [style.transform]="'rotate(' + rotationAngle + 'deg)'">
+          <img *ngIf="pickedMediaType === 'image'" [src]="pickedMediaUrl" alt="Selected Media" class="editor-preview-media" />
+          <video *ngIf="pickedMediaType === 'video'" [src]="pickedMediaUrl" controls class="editor-preview-media"></video>
+
+          <!-- Text Overlay Banner -->
+          <div class="image-text-overlay-banner" *ngIf="textOverlayText">
+            <span class="overlay-text-content">{{ textOverlayText }}</span>
+          </div>
+
+          <!-- HTML5 Doodle Drawing Canvas -->
+          <canvas
+            #doodleCanvas
+            class="doodle-drawing-canvas"
+            [class.active]="isDoodlingMode"
+            (mousedown)="startDrawing($event)"
+            (mousemove)="draw($event)"
+            (mouseup)="stopDrawing()"
+            (touchstart)="startDrawing($event)"
+            (touchmove)="draw($event)"
+            (touchend)="stopDrawing()"
+          ></canvas>
+        </div>
+      </div>
+
+      <!-- Bottom Caption Bar & Green WhatsApp Send FAB -->
+      <footer class="editor-bottom-footer">
+        <div class="caption-input-container">
+          <span class="material-icons-outlined caption-icon">add_photo_alternate</span>
+          <input
+            type="text"
+            class="caption-text-input"
+            placeholder="Add a caption..."
+            [(ngModel)]="mediaCaption"
+            (keydown.enter)="publishMediaEditorStatus()"
+          />
+        </div>
+
+        <button type="button" class="btn-whatsapp-send-fab" (click)="publishMediaEditorStatus()" title="Publish Status">
+          <span class="material-icons-outlined">send</span>
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- WHATSAPP TEXT STATUS EDITOR MODAL -->
+  <div class="modal-overlay" *ngIf="showTextStatusModal" (click)="closeTextModal()">
+    <div class="modal-card glass-card text-creator-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>✍️ Create Text Status</h3>
+        <button type="button" class="btn-close-modal" (click)="closeTextModal()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- Live Color Preview Box -->
+        <div class="text-preview-box" [style.background]="selectedBgColor">
+          <p class="preview-text" [style.font-family]="selectedFont">{{ textStatusInput || 'Type your status quote here...' }}</p>
+        </div>
+
+        <!-- Text Input -->
+        <div class="form-group">
+          <label>Status Quote</label>
+          <textarea
+            rows="3"
+            class="form-input text-area-status"
+            placeholder="What's on your mind? ✨"
+            [(ngModel)]="textStatusInput"
+          ></textarea>
+        </div>
+
+        <!-- Color Options Palette -->
+        <div class="form-group">
+          <label>Choose Background Color</label>
+          <div class="color-palette-row">
+            <button
+              *ngFor="let col of colorOptions"
+              type="button"
+              class="color-btn"
+              [style.background]="col"
+              [class.active]="selectedBgColor === col"
+              (click)="selectedBgColor = col"
+            ></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" (click)="closeTextModal()">Cancel</button>
+        <button type="button" class="btn-whatsapp-send-fab fab-inline" (click)="submitTextStatus()" [disabled]="!textStatusInput.trim()">
+          <span class="material-icons-outlined">send</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL-SCREEN WHATSAPP STORY VIEWER MODAL -->
+  <div class="story-viewer-overlay" *ngIf="activeGroup" (click)="closeStatusViewer()">
+    <div class="story-viewer-card" (click)="$event.stopPropagation()">
+      <!-- Multi-Segment Progress Bars at Top -->
+      <div class="multi-progress-bar-container">
+        <div *ngFor="let item of activeGroup.items; let i = index" class="progress-segment-track">
+          <div
+            class="progress-segment-fill"
+            [style.width.%]="i < activeItemIndex ? 100 : (i === activeItemIndex ? storyProgress : 0)"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Story User Header -->
+      <div class="story-user-header">
+        <img [src]="activeGroup.contactAvatar" [alt]="activeGroup.contactName" class="story-header-avatar" />
+        <div class="story-header-text">
+          <strong>{{ activeGroup.contactName }}</strong>
+          <span>{{ activeStatusItem?.timeStr }}</span>
+        </div>
+
+        <button type="button" class="btn-delete-story" *ngIf="activeGroup.isMine" (click)="deleteCurrentStatusItem()" title="Delete Status">
+          <span class="material-icons-outlined">delete</span>
+        </button>
+
+        <button type="button" class="btn-close-story" (click)="closeStatusViewer()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Tap Zones for Prev/Next Navigation -->
+      <div class="story-tap-zone left-tap" (click)="prevStatusItem()"></div>
+      <div class="story-tap-zone right-tap" (click)="nextStatusItem()"></div>
+
+      <!-- Media or Text Content Canvas -->
+      <div class="story-content-view">
+        <!-- Text Status Slide -->
+        <div
+          *ngIf="activeStatusItem?.type === 'text'"
+          class="text-status-slide"
+          [style.background]="activeStatusItem?.bgColor"
+        >
+          <p class="text-slide-quote" [style.font-family]="activeStatusItem?.fontStyle || 'Manrope'">{{ activeStatusItem?.textContent }}</p>
+        </div>
+
+        <!-- Image / Video Status Slide -->
+        <div *ngIf="activeStatusItem?.type === 'image' || activeStatusItem?.type === 'video'" class="media-status-slide">
+          <div class="media-transform-wrapper" [style.transform]="'rotate(' + (activeStatusItem?.rotationAngle || 0) + 'deg)'">
+            <img [src]="activeStatusItem?.mediaUrl" [alt]="activeStatusItem?.caption" class="media-slide-img" />
+            <img *ngIf="activeStatusItem?.doodleDataUrl" [src]="activeStatusItem?.doodleDataUrl" class="doodle-overlay-img" />
+            <div class="text-overlay-slide-banner" *ngIf="activeStatusItem?.textOverlay">
+              <span>{{ activeStatusItem?.textOverlay }}</span>
+            </div>
+          </div>
+          <p class="media-slide-caption" *ngIf="activeStatusItem?.caption">{{ activeStatusItem?.caption }}</p>
+        </div>
+      </div>
+
+      <!-- Views Counter for My Status -->
+      <div class="story-footer-views" *ngIf="activeGroup.isMine && activeStatusItem">
+        <span class="material-icons-outlined">visibility</span>
+        <span>{{ activeStatusItem.viewsCount || 0 }} views</span>
+      </div>
+
+      <!-- Status Reply Input Bar for Contacts -->
+      <div class="story-reply-footer" *ngIf="!activeGroup.isMine">
+        <input
+          type="text"
+          class="story-reply-input"
+          [placeholder]="'Reply to ' + activeGroup.contactName + '...'"
+          [(ngModel)]="statusReplyText"
+          (keydown.enter)="sendStatusReply()"
+        />
+        <button type="button" class="btn-send-status-reply" (click)="sendStatusReply()" [disabled]="!statusReplyText.trim()">
+          <span class="material-icons-outlined">send</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</aside>

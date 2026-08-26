@@ -1,0 +1,444 @@
+:host {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Manrope', sans-serif;
+  background-color: #111b21;
+  color: #e9edef;
+}
+
+#profile-shader-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+#profile-shader-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.profile-page-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #051424;
+}
+
+/* WhatsApp Centered Layout Container */
+.whatsapp-profile-card {
+  width: 100%;
+  max-width: 500px;
+  height: 100vh;
+  background-color: rgba(17, 27, 33, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 10;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+@media (min-width: 769px) {
+  .whatsapp-profile-card {
+    height: 92vh;
+    max-height: 800px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* WhatsApp Profile Top Header */
+.whatsapp-profile-header {
+  height: 60px;
+  background-color: #202c33;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.btn-header-back {
+  background: transparent;
+  border: none;
+  color: #aebac1;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.btn-header-back:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #002aa8;
+}
+
+.header-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #e9edef;
+  margin: 0;
+}
+
+/* Scrollable Profile Body */
+.profile-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+/* Avatar Photo Section */
+.avatar-photo-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px 0;
+  background: #111b21;
+}
+
+.large-avatar-container {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.profile-large-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.large-avatar-container:hover .profile-large-avatar {
+  transform: scale(1.02);
+}
+
+.camera-badge-overlay {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #1100a8;
+  color: #111b21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4);
+  border: 3px solid #111b21;
+  transition: transform 0.2s ease;
+}
+
+.camera-badge-overlay:hover {
+  transform: scale(1.1);
+  background: #02b891;
+}
+
+.camera-icon {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+/* Info Blocks */
+.profile-info-block {
+  display: flex;
+  gap: 20px;
+  padding: 18px 24px;
+  background: #111b21;
+  align-items: flex-start;
+}
+
+.block-icon-wrapper {
+  width: 24px;
+  padding-top: 2px;
+
+  color: #8696a0;
+}
+
+.block-icon {
+  font-size: 1.4rem;
+}
+
+.block-content-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.field-label-green {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #00a884;
+  margin-bottom: 6px;
+}
+
+.field-display-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-value-text {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #e9edef;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.btn-edit-pencil {
+  background: transparent;
+  border: none;
+  color: #8696a0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-edit-pencil:hover {
+  color: #00a884;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.field-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.edit-input-field {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid #00a884;
+  color: #e9edef;
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.95rem;
+  padding: 6px 0;
+  outline: none;
+}
+
+.edit-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-edit-action {
+  background: transparent;
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  color: #8696a0;
+}
+
+.btn-save {
+  color: #00a884;
+}
+
+.btn-edit-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.field-helper-text {
+  font-size: 0.75rem;
+  color: #8696a0;
+  margin: 10px 0 0 0;
+  line-height: 1.4;
+}
+
+.section-divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.06);
+  margin: 0 24px 0 68px;
+}
+
+/* Privacy Options Section */
+.privacy-options-block {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.privacy-option-item {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 24px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.privacy-option-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.privacy-icon {
+  font-size: 1.4rem;
+  color: #8696a0;
+}
+
+.privacy-text-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.privacy-text-meta strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e9edef;
+}
+
+.privacy-text-meta span {
+  font-size: 0.78rem;
+  color: #8696a0;
+  margin-top: 2px;
+}
+
+/* Photo Options Action Sheet Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 769px) {
+  .modal-overlay {
+    align-items: center;
+  }
+}
+
+.photo-options-sheet {
+  width: 100%;
+  max-width: 480px;
+  background-color: #202c33;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (min-width: 769px) {
+  .photo-options-sheet {
+    border-radius: 24px;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.sheet-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e9edef;
+  margin: 0 0 16px 0;
+}
+
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-action-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: transparent;
+  border: none;
+  color: #e9edef;
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-align: left;
+}
+
+.sheet-action-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.icon-green {
+  color: #00a884;
+}
+
+.icon-red {
+  color: #f87171;
+}
+
+.red-action {
+  color: #f87171;
+}
+
+/* Toast Banner */
+.toast-banner {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #202c33;
+  border: 1px solid #00a884;
+  color: #00a884;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 90;
+  white-space: nowrap;
+}

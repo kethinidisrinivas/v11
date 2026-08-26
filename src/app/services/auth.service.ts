@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
 
 export interface LinkedDevice {
   id: string;
@@ -48,6 +49,8 @@ export interface UserRecord {
 export class AuthService {
   private currentSession: UserSession | null = null;
   private pendingOtps: Record<string, string> = {};
+  private isLoggedInSubject = new BehaviorSubject<boolean>(false);
+  public isLoggedIn$: Observable<boolean> = this.isLoggedInSubject.asObservable();
 
   constructor() {
     this.initDefaultUsers();
@@ -59,6 +62,7 @@ export class AuthService {
         this.currentSession = null;
       }
     }
+    this.isLoggedInSubject.next(this.currentSession !== null);
   }
 
   private initDefaultUsers(): void {
@@ -387,6 +391,7 @@ export class AuthService {
   logout(): void {
     this.currentSession = null;
     localStorage.removeItem('romantic_messenger_session');
+    this.isLoggedInSubject.next(false);
   }
 
   getCurrentUser(): UserSession | null {
@@ -420,6 +425,7 @@ export class AuthService {
       ]
     };
     this.saveCurrentSessionState();
+    this.isLoggedInSubject.next(true);
   }
 
   private saveCurrentSessionState(): void {

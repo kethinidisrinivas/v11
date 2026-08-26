@@ -1,757 +1,219 @@
-<div class="messenger-container">
+<div class="messenger-viewport">
+  <!-- Background WebGL Shader Canvas -->
+  <div id="shader-container">
+    <canvas #shaderCanvas id="shader-canvas"></canvas>
+  </div>
 
-  <!-- TOP NAVBAR -->
-  <header class="top-navbar">
-    <div class="navbar-brand">
-      <span class="logo-emoji">💖</span>
-      <span class="brand-title">Romantic Messenger</span>
-    </div>
-
-    <div class="navbar-actions">
-      <!-- Home Icon -->
-      <button 
-        class="nav-btn-icon" 
-        [class.active]="activeNavTab === 'chats'" 
-        (click)="setNavTab('chats')" 
-        title="Home">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-          <polyline points="9 22 9 12 15 12 15 22"></polyline>
-        </svg>
-        <span>Home</span>
-      </button>
-
-      <!-- Settings Icon -->
-      <button 
-        class="nav-btn-icon" 
-        [class.active]="showSettingsModal" 
-        (click)="openSettings('linked')" 
-        title="Settings">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-        <span>Settings</span>
-      </button>
-
-      <!-- User Avatar Profile Quick Access -->
-      <div class="user-profile-badge" (click)="openProfileImage(currentUser?.avatar)" title="View Profile Photo">
-        <img [src]="currentUser?.avatar" alt="Avatar" />
+  <!-- App Main Root Canvas -->
+  <div id="app-root">
+    <!-- Main 3-Column Messenger Layout Container -->
+    <div class="messenger-layout-body" [class.mobile-chat-open]="showMobileChat">
+      <!-- 1. LEFT SIDEBAR (320px) -->
+      <div class="sidebar-wrapper">
+        <app-sidebar
+          [contacts]="contacts"
+          [selectedContact]="selectedContact"
+          [currentUser]="currentUser"
+          (selectContact)="onSelectContact($event)"
+          (openNewChat)="openNewChatModal()"
+          (openSettings)="openSettings('profile')"
+        ></app-sidebar>
       </div>
-    </div>
-  </header>
 
-  <!-- MAIN APPLICATION VIEWPORT -->
-  <main class="messenger-viewport">
-
-    <!-- VIEW 1: CONTACTS & MESSAGES VIEW -->
-    <div class="view-pane contacts-chats-pane" *ngIf="activeNavTab === 'chats'" [class.has-selected-chat]="!!selectedContact">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <!-- User Info Bar -->
-        <header class="sidebar-header">
-          <div class="user-info">
-            <div class="avatar-ring user-avatar" (click)="openProfileImage(currentUser?.avatar)">
-              <img [src]="currentUser?.avatar" alt="Avatar" />
-            </div>
-            <div class="user-meta">
-              <h4>{{ currentUser?.name || 'My Account' }}</h4>
-              <span class="user-status">{{ currentUser?.phone || 'Online 💖' }}</span>
-            </div>
-          </div>
-          <button class="add-contact-btn-icon" (click)="showAddContactModal = true" title="Add Contact">+</button>
-        </header>
-
-        <!-- SEARCH BAR & CONTACTS HEADER WITH MESSAGES COUNT -->
-        <section class="search-section">
-          <div class="search-bar">
-            <span class="search-icon">🔍</span>
-            <input 
-              type="text" 
-              placeholder="Search contacts or phone number..." 
-              [(ngModel)]="searchQuery" 
-              (ngModelChange)="onSearchChange()" />
-          </div>
-
-          <div class="contacts-title-row">
-            <h5>Contacts</h5>
-            <span class="messages-count-badge">
-              Messages ({{ getTotalUnreadCount() }})
-            </span>
-          </div>
-        </section>
-
-        <!-- CONTACTS LIST / SEARCH RESULTS -->
-        <section class="contacts-list">
-
-          <!-- 1. Registered User Match (Found via Phone/Name Search) -->
-          <div class="search-card registered-user-card" *ngIf="foundRegisteredUser">
-            <div class="contact-avatar-wrapper">
-              <img [src]="foundRegisteredUser.avatar" alt="Avatar" />
-            </div>
-            <div class="contact-details">
-              <h4>{{ foundRegisteredUser.name }}</h4>
-              <p>📱 {{ foundRegisteredUser.phone }}</p>
-              <button class="btn-add-user" (click)="addRegisteredUser(foundRegisteredUser)">
-                + Add to Contacts
-              </button>
-            </div>
-          </div>
-
-          <!-- 2. Unregistered Phone Number -> Invite Option -->
-          <div class="search-card invite-user-card" *ngIf="showInviteOption">
-            <div class="invite-icon">📱</div>
-            <div class="contact-details">
-              <h4>Unregistered Phone</h4>
-              <p>{{ unregisteredPhone }} is not on Romantic Messenger yet.</p>
-              <button class="btn-invite-user" (click)="inviteContact(unregisteredPhone)">
-                💌 Send SMS Invite
-              </button>
-            </div>
-          </div>
-
-          <!-- 3. Existing Contacts List -->
-          <div 
-            class="contact-item" 
-            *ngFor="let contact of filteredContacts" 
-            [class.active]="selectedContact?.id === contact.id"
-            (click)="selectContact(contact)">
-            <div class="contact-avatar-wrapper" (click)="$event.stopPropagation(); openProfileImage(contact.avatar)">
-              <img [src]="contact.avatar" [alt]="contact.name" />
-              <span class="online-indicator" *ngIf="contact.isOnline"></span>
-            </div>
-            <div class="contact-details">
-              <div class="contact-row">
-                <h4>{{ contact.name }}</h4>
-                <span class="unread-badge" *ngIf="contact.unreadCount > 0">{{ contact.unreadCount }}</span>
-              </div>
-              <p>{{ contact.statusText }}</p>
-              <span class="contact-phone-sub" *ngIf="contact.phone">📱 {{ contact.phone }}</span>
-            </div>
-          </div>
-
-          <div class="no-results-text" *ngIf="filteredContacts.length === 0 && !foundRegisteredUser && !showInviteOption">
-            No contacts found matching "{{ searchQuery }}".
-          </div>
-        </section>
-      </aside>
-
-      <!-- Main Chat Workspace -->
-      <main class="chat-area" *ngIf="selectedContact; else noChatSelected">
-        <!-- Chat Header -->
-        <header class="chat-header">
-          <button class="mobile-back-btn" (click)="deselectContact()" title="Back to Contacts">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-          </button>
-          <div class="active-contact-info" (click)="openSharedMediaDrawer()" title="Click to view Shared Media & Files">
-            <div class="avatar-ring header-avatar" (click)="$event.stopPropagation(); openProfileImage(selectedContact.avatar)">
-              <img [src]="selectedContact.avatar" [alt]="selectedContact.name" />
-            </div>
-            <div class="contact-meta">
-              <h3>{{ selectedContact.name }}</h3>
-              <span class="online-subtitle">
-                {{ selectedContact.phone ? selectedContact.phone + ' • ' : '' }}
-                {{ selectedContact.isOnline ? 'Online 💘' : 'Offline' }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Shared Media Quick Trigger & Calling Controls -->
-          <div class="call-controls">
-            <button class="call-icon-btn media-btn" (click)="openSharedMediaDrawer()" title="Shared Media & Files">
-              📂 Files
-            </button>
-            <button class="call-icon-btn" (click)="startCall('audio')" title="Voice Call">
-              📞
-            </button>
-            <button class="call-icon-btn" (click)="startCall('video')" title="Video Call">
-              📹
-            </button>
-          </div>
-        </header>
-
-        <!-- Messages Feed -->
-        <div class="chat-messages">
-          <div class="message-group" *ngFor="let msg of messages">
-            <div class="message-bubble" [class.sender]="msg.senderId === 'me'" [class.receiver]="msg.senderId !== 'me'">
-              <div class="file-attachment" *ngIf="msg.file">
-                <div class="image-preview" *ngIf="msg.file.type === 'image'">
-                  <img [src]="msg.file.url" [alt]="msg.file.name" (click)="openProfileImage(msg.file.url)" />
-                </div>
-                <div class="file-info" *ngIf="msg.file.type !== 'image'">
-                  <div class="file-icon" [class.audio]="msg.file.type === 'audio'">
-                    <span *ngIf="msg.file.type === 'audio'">🎵</span>
-                    <span *ngIf="msg.file.type !== 'audio'">📄</span>
-                  </div>
-                  <div class="file-meta">
-                    <h5>{{ msg.file.name }}</h5>
-                    <span>{{ msg.file.size }}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <p class="message-text" *ngIf="msg.text">{{ msg.text }}</p>
-              <span class="message-time">{{ msg.timestamp | date:'shortTime' }}</span>
-            </div>
-          </div>
-
-          <!-- Typing Indicator -->
-          <div class="typing-indicator-wrapper" *ngIf="activeTyping">
-            <div class="typing-bubble">
-              <span class="typing-text">💖 {{ activeTyping }} is typing something sweet...</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Chat Input Bar -->
-        <footer class="chat-input-bar">
-          <div class="attach-container">
-            <button class="input-action-btn" (click)="showAttachMenu = !showAttachMenu" title="Attach file">+</button>
-            <div class="attach-dropdown" *ngIf="showAttachMenu">
-              <button (click)="triggerAttachment('image')">🌅 Photo</button>
-              <button (click)="triggerAttachment('audio')">🎵 Voice Note</button>
-              <button (click)="triggerAttachment('file')">💌 Love Letter</button>
-            </div>
-          </div>
-
-          <input 
-            type="text" 
-            placeholder="Type a sweet message..." 
-            [(ngModel)]="newMessageText" 
-            (keyup.enter)="sendMessage()" />
-
-          <button class="send-btn" (click)="sendMessage()" [disabled]="!newMessageText.trim()">
-            🚀
-          </button>
-        </footer>
-      </main>
-
-      <ng-template #noChatSelected>
-        <div class="no-chat-container">
-          <div class="heart-lock-animation">💖</div>
-          <h2>Select a contact to view conversation</h2>
-        </div>
-      </ng-template>
-    </div>
-
-    <!-- VIEW 2: STATUS VIEW -->
-    <div class="view-pane status-pane" *ngIf="activeNavTab === 'status'">
-      <div class="status-container-card glass">
-        <header class="pane-header">
-          <h2>Status Updates 🌟</h2>
-          <button class="btn-primary" (click)="postNewStatus()">+ Add Status</button>
-        </header>
-
-        <!-- STATUS SCROLL BAR (Contains Contacts, Status, and Phone Call sections) -->
-        <section class="status-scroll-bar-section">
-          <h3>Status Scroll Bar</h3>
-          
-          <div class="status-scroll-container">
-            
-            <!-- SECTION 1: Contacts Stories Circle Row -->
-            <div class="scroll-card-group">
-              <span class="group-label">👥 Contacts</span>
-              <div class="scroll-items-row">
-                <div class="status-avatar-item" *ngFor="let story of statusStories" (click)="viewStatus(story)">
-                  <div class="story-ring">
-                    <img [src]="story.contactAvatar" [alt]="story.contactName" />
-                  </div>
-                  <span class="avatar-name">{{ story.contactName.split(' ')[0] }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="group-separator"></div>
-
-            <!-- SECTION 2: Status Text Quotes & Memories -->
-            <div class="scroll-card-group">
-              <span class="group-label">🌟 Status Quotes</span>
-              <div class="scroll-items-row">
-                <div class="status-quote-card" *ngFor="let story of statusStories" (click)="viewStatus(story)">
-                  <p>"{{ story.caption }}"</p>
-                  <span>— {{ story.contactName }} ({{ story.timestamp }})</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="group-separator"></div>
-
-            <!-- SECTION 3: Phone Call Shortcuts -->
-            <div class="scroll-card-group">
-              <span class="group-label">📞 Phone Call Shortcuts</span>
-              <div class="scroll-items-row">
-                <div class="call-shortcut-card" *ngFor="let contact of contacts">
-                  <img [src]="contact.avatar" [alt]="contact.name" />
-                  <div class="shortcut-info">
-                    <h5>{{ contact.name }}</h5>
-                    <div class="shortcut-btns">
-                      <button (click)="startCall('audio', contact)" title="Audio Call">📞</button>
-                      <button (click)="startCall('video', contact)" title="Video Call">📹</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </section>
-
-        <!-- STORIES GALLERY -->
-        <section class="status-stories-grid">
-          <h3>Recent Status Posts</h3>
-          <div class="grid-container">
-            <div class="story-grid-card" *ngFor="let story of statusStories" (click)="viewStatus(story)">
-              <img [src]="story.mediaUrl" [alt]="story.caption" class="story-preview-bg" />
-              <div class="story-grid-overlay">
-                <div class="story-author">
-                  <img [src]="story.contactAvatar" />
-                  <div>
-                    <h4>{{ story.contactName }}</h4>
-                    <span>{{ story.timestamp }}</span>
-                  </div>
-                </div>
-                <p class="story-caption-preview">{{ story.caption }}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
+      <!-- 2. CENTER CHAT AREA -->
+      <div class="chat-area-wrapper">
+        <app-chat-window
+          [contact]="selectedContact"
+          [messages]="activeMessages"
+          [typingStatus]="typingStatus"
+          (sendMessage)="onSendMessage($event)"
+          (startCall)="startCall($event)"
+          (toggleContactInfo)="toggleRightInfo()"
+          (backToContacts)="onBackToContacts()"
+        ></app-chat-window>
       </div>
-    </div>
 
-    <!-- VIEW 3: PHONE VIEW (Call History with Date, Time, Duration) -->
-    <div class="view-pane phone-pane" *ngIf="activeNavTab === 'phone'">
-      <div class="phone-container-card glass">
-        <header class="pane-header">
-          <h2>Call History 📞</h2>
-          <button class="btn-primary" (click)="startCall('audio')">📞 New Call</button>
-        </header>
-
-        <section class="call-logs-section">
-          <div class="call-log-card" *ngFor="let log of callLogs">
-            <div class="log-avatar" (click)="openProfileImage(log.contactAvatar)">
-              <img [src]="log.contactAvatar" [alt]="log.contactName" />
-            </div>
-
-            <div class="log-info">
-              <h4>{{ log.contactName }}</h4>
-              <div class="log-meta">
-                <span class="log-type" [class]="log.type">
-                  <span *ngIf="log.type === 'incoming'">↙️ Incoming</span>
-                  <span *ngIf="log.type === 'outgoing'">↗️ Outgoing</span>
-                  <span *ngIf="log.type === 'missed'">❌ Missed</span>
-                </span>
-                <span class="log-mode">{{ log.mode === 'video' ? '📹 Video' : '📞 Voice' }}</span>
-                <span class="log-time">📅 {{ log.timeStr }}</span>
-              </div>
-            </div>
-
-            <div class="log-duration">
-              <span class="duration-badge">⏱️ {{ log.formattedDuration }}</span>
-            </div>
-
-            <div class="log-action">
-              <button class="btn-call-back" (click)="startCall(log.mode, { id: log.contactId, name: log.contactName, avatar: log.contactAvatar, statusText: '', isOnline: true, unreadCount: 0 })" title="Call back">
-                {{ log.mode === 'video' ? '📹 Call' : '📞 Call' }}
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-
-    <!-- VIEW 4: PROFILE VIEW (Photo, Status, Songs) -->
-    <div class="view-pane profile-pane" *ngIf="activeNavTab === 'profile'">
-      <div class="profile-container-card glass">
-        <header class="pane-header">
-          <h2>My Profile 👤</h2>
-        </header>
-
-        <div class="profile-layout-grid">
-          <!-- Left Column: User Profile Card -->
-          <div class="profile-card-left">
-            <div class="profile-avatar-large" (click)="openProfileImage(profileAvatarUrl)">
-              <img [src]="profileAvatarUrl" alt="Profile Picture" />
-              <div class="avatar-overlay"><span>🔍 View Image</span></div>
-            </div>
-            <h3>{{ currentUser?.name }}</h3>
-            <p class="profile-phone-text">📱 {{ currentUser?.phone }}</p>
-            <p class="profile-status-preview">"{{ profileStatusText }}"</p>
-          </div>
-
-          <!-- Right Column: Edit Profile & Songs -->
-          <div class="profile-card-right">
-            <!-- Edit Profile Photo & Status -->
-            <form (ngSubmit)="saveProfileChanges()" class="profile-form">
-              <h4>Profile Settings</h4>
-
-              <div class="form-group">
-                <label>Profile Photo Image URL</label>
-                <input 
-                  type="text" 
-                  [(ngModel)]="profileAvatarUrl" 
-                  name="profileAvatarUrl" 
-                  placeholder="https://..." />
-              </div>
-
-              <div class="form-group">
-                <label>Status Message / Bio</label>
-                <input 
-                  type="text" 
-                  [(ngModel)]="profileStatusText" 
-                  name="profileStatusText" 
-                  placeholder="Living under the stars ✨" />
-              </div>
-
-              <button type="submit" class="btn-primary">Save Profile Changes</button>
-            </form>
-
-            <!-- FAVORITE SONGS SECTION -->
-            <section class="songs-section">
-              <h4>Favorite Songs 🎵</h4>
-
-              <div class="songs-list">
-                <div class="song-item" *ngFor="let song of currentUser?.songs">
-                  <div class="song-icon">🎵</div>
-                  <div class="song-details">
-                    <h5>{{ song.title }}</h5>
-                    <p>{{ song.artist }} • {{ song.duration }}</p>
-                  </div>
-                  <button class="btn-play-song" (click)="togglePlaySong(song.id)">
-                    {{ playingSongId === song.id ? '⏸️' : '▶️' }}
-                  </button>
-                </div>
-              </div>
-
-              <!-- Add New Song Form -->
-              <form (ngSubmit)="addFavoriteSong()" class="add-song-form">
-                <input type="text" placeholder="Song Title" [(ngModel)]="newSongTitle" name="newSongTitle" required />
-                <input type="text" placeholder="Artist Name" [(ngModel)]="newSongArtist" name="newSongArtist" required />
-                <button type="submit" class="btn-secondary" [disabled]="!newSongTitle || !newSongArtist">+ Add Song</button>
-              </form>
-            </section>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- FOOTER NAVIGATION BAR -->
-  <footer class="bottom-nav-bar">
-    <button 
-      class="footer-nav-item" 
-      [class.active]="activeNavTab === 'chats'" 
-      (click)="setNavTab('chats')">
-      <span class="nav-icon">👥</span>
-      <span class="nav-label">Contacts</span>
-    </button>
-
-    <button 
-      class="footer-nav-item" 
-      [class.active]="activeNavTab === 'status'" 
-      (click)="setNavTab('status')">
-      <span class="nav-icon">🌟</span>
-      <span class="nav-label">Status</span>
-    </button>
-
-    <button 
-      class="footer-nav-item" 
-      [class.active]="activeNavTab === 'phone'" 
-      (click)="setNavTab('phone')">
-      <span class="nav-icon">📞</span>
-      <span class="nav-label">Phone</span>
-    </button>
-
-    <button 
-      class="footer-nav-item" 
-      [class.active]="activeNavTab === 'profile'" 
-      (click)="setNavTab('profile')">
-      <span class="nav-icon">👤</span>
-      <span class="nav-label">Profile</span>
-    </button>
-  </footer>
-
-  <!-- SHARED MEDIA AND FILES DRAWER (Opened when clicking contact name/header) -->
-  <div class="shared-media-drawer-overlay" *ngIf="showSharedMediaDrawer">
-    <div class="shared-media-drawer glass">
-      <header class="drawer-header">
-        <div class="drawer-title-row">
-          <h3>Shared Media & Files</h3>
-          <button class="close-btn" (click)="closeSharedMediaDrawer()">&times;</button>
-        </div>
-        <p>Sent by <strong>{{ selectedContact?.name }}</strong></p>
-
-        <!-- Media Tabs -->
-        <div class="media-tabs">
-          <button [class.active]="sharedMediaTab === 'images'" (click)="sharedMediaTab = 'images'">
-            🖼️ Images ({{ activeSharedMedia.images.length }})
-          </button>
-          <button [class.active]="sharedMediaTab === 'documents'" (click)="sharedMediaTab = 'documents'">
-            📄 Documents ({{ activeSharedMedia.documents.length }})
-          </button>
-          <button [class.active]="sharedMediaTab === 'links'" (click)="sharedMediaTab = 'links'">
-            🔗 Links ({{ activeSharedMedia.links.length }})
-          </button>
-        </div>
-      </header>
-
-      <div class="drawer-content">
-        <!-- 🖼️ IMAGES TAB -->
-        <div class="media-grid" *ngIf="sharedMediaTab === 'images'">
-          <div class="media-image-card" *ngFor="let img of activeSharedMedia.images" (click)="openProfileImage(img.url)">
-            <img [src]="img.url" [alt]="img.title" />
-            <div class="media-image-info">
-              <span>{{ img.title }}</span>
-              <small>{{ img.date }} • {{ img.size }}</small>
-            </div>
-          </div>
-          <p *ngIf="activeSharedMedia.images.length === 0" class="empty-media-msg">No shared images yet.</p>
-        </div>
-
-        <!-- 📄 DOCUMENTS TAB -->
-        <div class="media-list" *ngIf="sharedMediaTab === 'documents'">
-          <div class="doc-card" *ngFor="let doc of activeSharedMedia.documents">
-            <div class="doc-icon">📄</div>
-            <div class="doc-info">
-              <h4>{{ doc.name }}</h4>
-              <p>{{ doc.type }} • {{ doc.size }} • {{ doc.date }}</p>
-            </div>
-            <a [href]="doc.url" target="_blank" class="btn-doc-download">View</a>
-          </div>
-          <p *ngIf="activeSharedMedia.documents.length === 0" class="empty-media-msg">No shared documents yet.</p>
-        </div>
-
-        <!-- 🔗 LINKS TAB -->
-        <div class="media-list" *ngIf="sharedMediaTab === 'links'">
-          <div class="link-card" *ngFor="let link of activeSharedMedia.links">
-            <div class="link-icon">🔗</div>
-            <div class="link-info">
-              <h4>{{ link.title }}</h4>
-              <a [href]="link.url" target="_blank">{{ link.url }}</a>
-              <span class="link-domain">{{ link.domain }} • {{ link.date }}</span>
-            </div>
-          </div>
-          <p *ngIf="activeSharedMedia.links.length === 0" class="empty-media-msg">No shared links yet.</p>
-        </div>
+      <!-- 3. RIGHT SIDEBAR (260px) -->
+      <div class="info-sidebar-wrapper" *ngIf="showRightInfo">
+        <app-contact-info
+          [contact]="selectedContact"
+          [sharedMedia]="sharedMedia"
+          (closeInfo)="toggleRightInfo()"
+        ></app-contact-info>
       </div>
     </div>
   </div>
 
-  <!-- FULL PROFILE PICTURE LIGHTBOX OVERLAY -->
-  <div class="lightbox-overlay" *ngIf="lightboxImageUrl" (click)="closeProfileImage()">
-    <div class="lightbox-content" (click)="$event.stopPropagation()">
-      <button class="lightbox-close" (click)="closeProfileImage()">&times;</button>
-      <img [src]="lightboxImageUrl" alt="Full Profile Image" class="lightbox-img" />
-    </div>
-  </div>
-
-  <!-- SETTINGS MODAL (Linked Devices, Scanner, Logout, Profile) -->
+  <!-- Settings & Linked Devices & Scanner Modal -->
   <div class="modal-overlay" *ngIf="showSettingsModal" (click)="closeSettings()">
-    <div class="settings-modal-card glass" (click)="$event.stopPropagation()">
-      <header class="modal-header">
-        <h3>Settings ⚙️</h3>
-        <button class="modal-close-btn" (click)="closeSettings()">&times;</button>
-      </header>
+    <div class="settings-modal-card glass-card" (click)="$event.stopPropagation()">
+      <div class="settings-header">
+        <h3>⚙️ Messenger Settings</h3>
+        <button type="button" class="btn-close-modal" (click)="closeSettings()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
 
-      <div class="settings-body">
-        <!-- Settings Sidebar Navigation -->
-        <aside class="settings-nav">
-          <button [class.active]="settingsActiveSection === 'linked'" (click)="settingsActiveSection = 'linked'">
-            📱 Linked Devices
+      <div class="settings-body-layout">
+        <!-- Settings Subtabs -->
+        <div class="settings-nav-sidebar">
+          <button type="button" class="settings-nav-item" [class.active]="settingsActiveSection === 'linked'" (click)="settingsActiveSection = 'linked'">
+            <span class="material-icons-outlined">devices</span>
+            <span>Linked Devices</span>
           </button>
-          <button [class.active]="settingsActiveSection === 'scanner'" (click)="settingsActiveSection = 'scanner'">
-            📷 Scanner
+          <button type="button" class="settings-nav-item" [class.active]="settingsActiveSection === 'scanner'" (click)="settingsActiveSection = 'scanner'">
+            <span class="material-icons-outlined">qr_code_scanner</span>
+            <span>QR Scanner</span>
           </button>
-          <button [class.active]="settingsActiveSection === 'profile'" (click)="setNavTab('profile')">
-            👤 Profile
+          <button type="button" class="settings-nav-item" [class.active]="settingsActiveSection === 'profile'" (click)="settingsActiveSection = 'profile'">
+            <span class="material-icons-outlined">person</span>
+            <span>Profile Info</span>
           </button>
-          <button (click)="logout()" class="nav-logout">
-            🚪 Logout
+          <button type="button" class="settings-nav-item logout-item" (click)="handleLogout()">
+            <span class="material-icons-outlined">logout</span>
+            <span>Logout</span>
           </button>
-        </aside>
+        </div>
 
-        <!-- Settings Main View -->
-        <div class="settings-main-content">
-
-          <!-- 1. LINKED DEVICES SECTION -->
-          <div *ngIf="settingsActiveSection === 'linked'">
-            <div class="section-title-row">
-              <h4>Active Linked Devices</h4>
-              <button class="btn-primary" (click)="generateAddDeviceQr()">+ Add Device</button>
+        <!-- Settings Section Content -->
+        <div class="settings-content-pane">
+          <!-- SECTION 1: LINKED DEVICES -->
+          <div *ngIf="settingsActiveSection === 'linked'" class="settings-section">
+            <div class="section-top-row">
+              <h4>Active Logged-In Sessions</h4>
+              <button type="button" class="btn-add-device" (click)="generateAddDeviceQr()">
+                ➕ Add Device (Generate QR)
+              </button>
             </div>
 
-            <!-- Add Device QR Code Display -->
-            <div class="qr-code-box" *ngIf="showAddDeviceQr">
-              <h5>Scan this QR Code from another device:</h5>
-              <img [src]="qrCodeUrl" alt="QR Code" class="qr-img" />
-              <p>Point your phone's Scanner to authenticate and log in instantly.</p>
+            <!-- Dynamic QR Code Display -->
+            <div class="qr-code-generated-card" *ngIf="showAddDeviceQr">
+              <span class="qr-title">Scan QR code on your mobile device to log in:</span>
+              <img [src]="qrCodeUrl" alt="Linked Device QR Code" class="qr-code-img" />
+              <span class="qr-subtext">Valid for 5 minutes • Sanctuary Secure QR</span>
             </div>
 
-            <!-- List of Devices -->
+            <!-- Devices List -->
             <div class="devices-list">
-              <div class="device-card" *ngFor="let dev of linkedDevices">
-                <div class="device-icon">💻</div>
-                <div class="device-info">
-                  <h5>{{ dev.name }}</h5>
-                  <p>{{ dev.platform }} • {{ dev.browser }} • {{ dev.location }}</p>
-                  <small>Login Time: {{ dev.loginTime }} ({{ dev.lastActive }})</small>
+              <div *ngFor="let dev of linkedDevices" class="device-card">
+                <div class="device-icon-wrapper">
+                  <span class="material-icons-outlined">{{ dev.platform.includes('iOS') || dev.platform.includes('Mobile') ? 'smartphone' : 'laptop' }}</span>
                 </div>
-                <div class="device-actions">
-                  <span class="current-badge" *ngIf="dev.isCurrent">Current Device</span>
-                  <button class="btn-logout-device" *ngIf="!dev.isCurrent" (click)="logoutDevice(dev.id)">
-                    Logout Device
-                  </button>
+                <div class="device-meta">
+                  <strong class="dev-name">{{ dev.name }} <span *ngIf="dev.isCurrent" class="current-badge">(This Device)</span></strong>
+                  <span class="dev-info">{{ dev.platform }} • {{ dev.browser }}</span>
+                  <span class="dev-time">Login Time: {{ dev.loginTime }} • {{ dev.location }}</span>
                 </div>
+                <button type="button" class="btn-logout-dev" *ngIf="!dev.isCurrent" (click)="logoutDevice(dev.id)">
+                  Logout
+                </button>
+              </div>
+
+              <div class="empty-devices" *ngIf="linkedDevices.length === 0">
+                No active linked devices.
               </div>
             </div>
           </div>
 
-          <!-- 2. SCANNER SECTION -->
-          <div *ngIf="settingsActiveSection === 'scanner'">
-            <h4>QR Code Scanner 📷</h4>
-            <p>Scan the QR Code generated on another device to open/log in your account on that device.</p>
+          <!-- SECTION 2: QR SCANNER -->
+          <div *ngIf="settingsActiveSection === 'scanner'" class="settings-section scanner-section">
+            <h4>📷 QR Code Camera Scanner</h4>
+            <p class="scanner-desc">Point your camera at a Sanctuary QR code generated on another device to open & log in your account.</p>
 
             <div class="scanner-viewfinder">
-              <div class="scanner-laser" *ngIf="scannerSimulating"></div>
-              <div class="scanner-frame"></div>
-              <span class="scanner-hint">{{ scannerSimulating ? 'Scanning QR Code...' : 'Align QR Code within frame' }}</span>
+              <div class="scan-laser-line"></div>
+              <span class="material-icons-outlined scanner-center-icon">qr_code_2</span>
             </div>
 
-            <button class="btn-primary btn-scan-action" (click)="simulateQrScan()" [disabled]="scannerSimulating">
-              {{ scannerSimulating ? 'Scanning...' : 'Simulate Scanning QR Code' }}
+            <button type="button" class="btn-simulate-scan" (click)="simulateQrScan()" [disabled]="scannerSimulating">
+              <span *ngIf="!scannerSimulating">📸 Simulate QR Code Scan</span>
+              <span *ngIf="scannerSimulating">Scanning & Authorizing Session...</span>
             </button>
           </div>
 
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ADD CONTACT MODAL -->
-  <div class="modal-overlay" *ngIf="showAddContactModal" (click)="showAddContactModal = false">
-    <div class="call-card glass add-contact-card" (click)="$event.stopPropagation()">
-      <header class="modal-header">
-        <h3>Add New Contact</h3>
-        <button class="modal-close-btn" (click)="showAddContactModal = false">&times;</button>
-      </header>
-      
-      <form (ngSubmit)="addNewContact()" class="add-contact-form">
-        <div class="modal-input-group">
-          <label>Name</label>
-          <input type="text" placeholder="e.g. Liam 💖" [(ngModel)]="newContactName" name="newContactName" required />
-        </div>
-
-        <div class="modal-input-group">
-          <label>Phone Number</label>
-          <div class="phone-input-row">
-            <div class="country-picker-wrapper">
-              <button type="button" class="country-picker-btn" (click)="toggleNewContactCountryDropdown($event)" title="Select Country">
-                <span class="flag-icon">{{ selectedNewContactCountry.flag }}</span>
-                <span class="country-dial-code">{{ selectedNewContactCountry.dialCode }}</span>
-                <span class="picker-caret">▾</span>
-              </button>
-              <div class="country-dropdown-menu" *ngIf="showNewContactCountryDropdown" (click)="$event.stopPropagation()">
-                <div class="country-search-header">
-                  <input type="text" placeholder="🔍 Search country..." [(ngModel)]="newContactCountrySearch" [ngModelOptions]="{standalone: true}" (click)="$event.stopPropagation()" />
-                </div>
-                <div class="country-options-list">
-                  <div class="country-option-item" *ngFor="let country of filteredNewContactCountries" (click)="selectNewContactCountry(country)">
-                    <span class="option-flag">{{ country.flag }}</span>
-                    <span class="option-name">{{ country.name }}</span>
-                    <span class="option-dial">{{ country.dialCode }}</span>
-                  </div>
-                  <div class="country-no-match" *ngIf="filteredNewContactCountries.length === 0">
-                    No country found
-                  </div>
-                </div>
+          <!-- SECTION 3: PROFILE INFO -->
+          <div *ngIf="settingsActiveSection === 'profile'" class="settings-section">
+            <h4>User Account Overview</h4>
+            <div class="account-details-grid">
+              <div class="detail-row">
+                <span class="detail-label">Name:</span>
+                <span class="detail-val">{{ currentUser.name }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Phone:</span>
+                <span class="detail-val">{{ currentUser.phone || '+1 555 0101' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Status:</span>
+                <span class="detail-val">{{ currentUser.status }}</span>
               </div>
             </div>
-
-            <input type="tel" placeholder="555 0199" [(ngModel)]="newContactPhone" (ngModelChange)="onNewContactPhoneChange()" name="newContactPhone" />
           </div>
         </div>
+      </div>
+    </div>
+  </div>
 
-        <div class="modal-input-group">
-          <label>Status Message</label>
-          <input type="text" placeholder="e.g. Loving the stars ✨" [(ngModel)]="newContactStatus" name="newContactStatus" />
-        </div>
-
-        <div class="modal-input-group">
-          <label>Avatar Image URL</label>
-          <input type="text" placeholder="https://..." [(ngModel)]="newContactAvatar" name="newContactAvatar" />
-        </div>
-
-        <button type="submit" class="submit-contact-btn" [disabled]="!newContactName.trim()">
-          Add Contact 💖
+  <!-- New Chat Modal -->
+  <div class="modal-overlay" *ngIf="showNewChatModal" (click)="closeNewChatModal()">
+    <div class="modal-card glass-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Start New Conversation</h3>
+        <button type="button" class="btn-close-modal" (click)="closeNewChatModal()">
+          <span class="material-icons-outlined">close</span>
         </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- CALL SCREEN OVERLAY -->
-  <div class="call-overlay" *ngIf="activeCall" [class.video-call]="activeCall.type === 'video'">
-    <div class="call-card glass">
-      <div class="video-container" *ngIf="activeCall.type === 'video' && activeCall.status === 'connected'">
-        <img [src]="activeCall.contactAvatar" alt="Camera stream" class="video-partner-stream" />
-        <div class="self-stream-preview">
-          <img [src]="currentUser?.avatar" alt="My Camera preview" />
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Contact Name</label>
+          <input type="text" [(ngModel)]="newContactName" placeholder="e.g. Emma Watson" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label>Phone Number (Optional)</label>
+          <input type="text" [(ngModel)]="newContactPhone" placeholder="+1 (555) 000-0000" class="form-input" />
+        </div>
+        <div class="form-group">
+          <label>About / Status (Optional)</label>
+          <input type="text" [(ngModel)]="newContactAbout" placeholder="Hey! Using Sanctuary Messenger" class="form-input" />
         </div>
       </div>
-
-      <div class="call-info" *ngIf="activeCall.type === 'audio' || activeCall.status === 'ringing'">
-        <div class="pulse-ring">
-          <img [src]="activeCall.contactAvatar" [alt]="activeCall.contactName" class="call-avatar" />
-        </div>
-        <h2>{{ activeCall.contactName }}</h2>
-        <span class="call-status" [class.ringing]="activeCall.status === 'ringing'">
-          {{ activeCall.status === 'ringing' ? 'Calling...' : 'Connected 💞' }}
-        </span>
-      </div>
-
-      <div class="call-timer" *ngIf="activeCall.status === 'connected'">
-        {{ callDurationFormatted }}
-      </div>
-
-      <div class="call-actions">
-        <button class="action-btn mute-btn" title="Mute Microphone">🎤</button>
-        <button class="action-btn hangup-btn" (click)="hangUp()" title="Hang Up">🔚</button>
-        <button class="action-btn video-btn" *ngIf="activeCall.type === 'video'" title="Toggle Camera">📹</button>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" (click)="closeNewChatModal()">Cancel</button>
+        <button type="button" class="btn-modal-submit" (click)="createNewContact()" [disabled]="!newContactName.trim()">
+          Start Chat
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- STATUS STORY VIEWER OVERLAY -->
-  <div class="story-overlay" *ngIf="activeStory">
-    <div class="story-card">
-      <div class="story-progress-bar">
-        <div class="story-progress-fill" [style.width.%]="storyProgress"></div>
+  <!-- Voice / Video Call Modal Overlay -->
+  <div class="call-modal-overlay" *ngIf="activeCall">
+    <div class="call-card glass-card">
+      <div class="call-avatar-container">
+        <img [src]="activeCall.contactAvatar" [alt]="activeCall.contactName" class="call-avatar" />
+        <div class="call-ring-waves" *ngIf="activeCall.status === 'ringing'">
+          <span></span><span></span><span></span>
+        </div>
       </div>
-      <header class="story-card-header">
-        <div class="story-uploader">
-          <img [src]="activeStory.contactAvatar" [alt]="activeStory.contactName" />
-          <div>
-            <h4>{{ activeStory.contactName }}</h4>
-            <span>{{ activeStory.timestamp }}</span>
-          </div>
-        </div>
-        <button class="story-close-btn" (click)="closeStory()">&times;</button>
-      </header>
-      <div class="story-content">
-        <img [src]="activeStory.mediaUrl" [alt]="activeStory.caption" />
-        <div class="story-caption">
-          <p>{{ activeStory.caption }}</p>
-        </div>
+
+      <h2 class="call-name">{{ activeCall.contactName }}</h2>
+      <p class="call-status">
+        <span *ngIf="activeCall.status === 'ringing'">Ringing Sanctuary {{ activeCall.type === 'video' ? 'Video' : 'Voice' }} Call...</span>
+        <span *ngIf="activeCall.status === 'connected'">Connected • {{ callTimeFormatted }}</span>
+        <span *ngIf="activeCall.status === 'ended'">Call Ended</span>
+      </p>
+
+      <div class="call-controls">
+        <button type="button" class="btn-call-control btn-mute">
+          <span class="material-icons-outlined">mic_off</span>
+        </button>
+        <button type="button" class="btn-call-control btn-end" (click)="endCall()">
+          <span class="material-icons-outlined">call_end</span>
+        </button>
+        <button type="button" class="btn-call-control btn-speaker">
+          <span class="material-icons-outlined">volume_up</span>
+        </button>
       </div>
     </div>
   </div>
-
-  <!-- TOAST NOTIFICATION POPUP -->
-  <div class="toast-popup" *ngIf="toastMessage">
-    <span>{{ toastMessage }}</span>
-  </div>
-
 </div>
-
