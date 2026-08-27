@@ -21,14 +21,33 @@ export interface Contact {
   isFavorite?: boolean;
   phone?: string;
   about?: string;
+  createdAt?: string;
+  userId?: string;
 }
 
 export interface Attachment {
   name: string;
-  type: 'image' | 'file' | 'audio' | 'voice';
+  type: 'image' | 'file' | 'audio' | 'voice' | 'video';
   url: string;
   size?: string;
   duration?: string;
+  mimeType?: string;
+  extension?: string;
+  uploadProgress?: number;
+  uploadStatus?: 'uploading' | 'completed' | 'failed';
+}
+
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  users: string[];
+}
+
+export interface QuotedMessagePreview {
+  id: string;
+  senderName: string;
+  text: string;
+  senderId: string;
 }
 
 export interface Message {
@@ -39,8 +58,15 @@ export interface Message {
   timestamp: Date;
   timeStr: string;
   isRead: boolean;
+  status?: 'sent' | 'delivered' | 'seen';
   isStarred?: boolean;
   attachment?: Attachment;
+  isEdited?: boolean;
+  isDeletedForEveryone?: boolean;
+  deletedForUsers?: string[];
+  reactions?: MessageReaction[];
+  replyTo?: QuotedMessagePreview;
+  isForwarded?: boolean;
 }
 
 export interface StatusItem {

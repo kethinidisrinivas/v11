@@ -1,14 +1,35 @@
-<main class="chat-window-container">
+<main class="chat-window-container" (click)="closeActionMenu()">
+  <!-- Hidden File Input Controls for Real Device Gallery, File Manager & Camera -->
+  <input #galleryFileInput type="file" accept="image/*,video/*" multiple style="display:none;" (change)="onGalleryFilesSelected($event)" />
+  <input #documentFileInput type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,application/*,text/*" multiple style="display:none;" (change)="onDocumentFilesSelected($event)" />
+  <input #cameraFileInput type="file" accept="image/*,video/*" capture="environment" style="display:none;" (change)="onCameraFileSelected($event)" />
+
+  <!-- Toast Notification -->
+  <div class="floating-toast" *ngIf="toastNotice">{{ toastNotice }}</div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" *ngIf="deleteModalMessage" (click)="closeDeleteModal()">
+    <div class="modal-card glass-card" (click)="$event.stopPropagation()">
+      <h3>Delete message?</h3>
+      <p>Choose how you want to delete this message.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-modal btn-danger-me" (click)="deleteForMe(deleteModalMessage!)">Delete for me</button>
+        <button type="button" class="btn-modal btn-danger-everyone" *ngIf="deleteModalMessage!.senderId === 'me'" (click)="deleteForEveryone(deleteModalMessage!)">Delete for everyone</button>
+        <button type="button" class="btn-modal btn-cancel" (click)="closeDeleteModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Selected Contact Header -->
   <header class="chat-header glass-header" *ngIf="contact">
-    <div class="header-left">
+    <div class="header-left" *ngIf="!isSelectionMode">
       <!-- Mobile Back Button -->
       <button type="button" class="btn-icon btn-mobile-back" (click)="backToContacts.emit()">
         <span class="material-icons-outlined">arrow_back</span>
       </button>
 
       <div class="contact-profile-summary" (click)="toggleContactInfo.emit()">
-        <div class="header-avatar-wrapper">
+        <div class="header-avatar-wrapper" (click)="openLightbox(contact.avatar); $event.stopPropagation();" title="Click to view profile picture">
           <img [src]="contact.avatar" [alt]="contact.name" class="header-avatar" />
           <span class="header-status-dot" [class.online]="contact.isOnline"></span>
         </div>
@@ -26,7 +47,15 @@
       </div>
     </div>
 
-    <div class="header-actions">
+    <!-- Multi-Selection Mode Header -->
+    <div class="selection-header-content" *ngIf="isSelectionMode">
+      <button type="button" class="btn-icon btn-exit-selection" (click)="exitSelectionMode()" title="Cancel Selection">
+        <span class="material-icons-outlined">close</span>
+      </button>
+      <span class="selection-count-text">{{ selectedMessageIds.size }} message{{ selectedMessageIds.size === 1 ? '' : 's' }} selected</span>
+    </div>
+
+    <div class="header-actions" *ngIf="!isSelectionMode">
       <button type="button" class="btn-icon" (click)="startCall.emit('audio')" title="Voice Call">
         <span class="material-icons-outlined">call</span>
       </button>
@@ -35,6 +64,15 @@
       </button>
       <button type="button" class="btn-icon" (click)="toggleContactInfo.emit()" title="Contact Info">
         <span class="material-icons-outlined">info</span>
+      </button>
+    </div>
+
+    <div class="header-actions" *ngIf="isSelectionMode">
+      <button type="button" class="btn-icon btn-action-select-all" (click)="selectAllMessages()" title="Select All Messages">
+        <span class="material-icons-outlined">select_all</span>
+      </button>
+      <button type="button" class="btn-icon btn-forward-selected" (click)="openForwardModalForSelected()" [disabled]="selectedMessageIds.size === 0" title="Forward Selected Messages">
+        <span class="material-icons-outlined">shortcut</span>
       </button>
     </div>
   </header>
@@ -58,52 +96,196 @@
     <!-- Message Bubbles -->
     <div
       *ngFor="let msg of messages"
+      [id]="'msg-' + msg.id"
       class="message-row"
       [class.sent-row]="msg.senderId === 'me'"
       [class.received-row]="msg.senderId !== 'me'"
+      [class.selected-row]="isMessageSelected(msg.id)"
+      (touchstart)="onMessageMouseDown(msg, $event)"
+      (touchmove)="onMessageTouchMove(msg, $event)"
+      (touchend)="onMessageMouseUp(msg)"
+      (mousedown)="onMessageMouseDown(msg, $event)"
+      (mousemove)="onMessageTouchMove(msg, $event)"
+      (mouseup)="onMessageMouseUp(msg)"
+      (click)="onMessageClick(msg, $event)"
     >
-      <div class="message-bubble-wrapper">
+      <!-- Selection Checkbox (in multi-select mode) -->
+      <div class="msg-select-checkbox-wrapper" *ngIf="isSelectionMode && !msg.isDeletedForEveryone">
+        <div class="msg-select-checkbox" [class.checked]="isMessageSelected(msg.id)">
+          <span class="material-icons-outlined check-icon" *ngIf="isMessageSelected(msg.id)">check</span>
+        </div>
+      </div>
+
+      <!-- Swipe Reply Icon Indicator -->
+      <div class="swipe-reply-indicator" *ngIf="swipeOffsetMap[msg.id] > 20" [style.opacity]="swipeOffsetMap[msg.id] / 50">
+        <span class="material-icons-outlined">reply</span>
+      </div>
+
+      <div class="message-bubble-wrapper" [style.transform]="'translateX(' + (swipeOffsetMap[msg.id] || 0) + 'px)'">
+        <!-- Action Menu Trigger & Popover Bar -->
+        <div class="message-actions-trigger-wrapper" *ngIf="!isSelectionMode">
+          <button type="button" class="btn-msg-action-trigger" (click)="toggleActionMenu(msg.id, $event)" title="Message Actions">
+            <span class="material-icons-outlined">more_vert</span>
+          </button>
+
+          <!-- Context Action Menu Popover -->
+          <div class="msg-action-popover glass-card" *ngIf="activeMenuMessageId === msg.id" (click)="$event.stopPropagation()">
+            <!-- Reaction Bar Quick Items -->
+            <div class="quick-reaction-bar">
+              <span *ngFor="let emoji of reactionEmojis" class="reaction-item" (click)="addReaction(msg, emoji)">{{ emoji }}</span>
+            </div>
+
+            <div class="menu-divider"></div>
+
+            <!-- Action Options -->
+            <button type="button" class="menu-action-btn" (click)="openForwardModalForSingle(msg)" *ngIf="!msg.isDeletedForEveryone">
+              <span class="material-icons-outlined">shortcut</span>
+              <span>Forward</span>
+            </button>
+
+            <button type="button" class="menu-action-btn" (click)="enterSelectionMode(msg)" *ngIf="!msg.isDeletedForEveryone">
+              <span class="material-icons-outlined">check_box</span>
+              <span>Select</span>
+            </button>
+
+            <button type="button" class="menu-action-btn" (click)="startReply(msg)" *ngIf="!msg.isDeletedForEveryone">
+              <span class="material-icons-outlined">reply</span>
+              <span>Reply</span>
+            </button>
+
+            <button type="button" class="menu-action-btn" (click)="copyMessageText(msg)" *ngIf="msg.text && !msg.isDeletedForEveryone">
+              <span class="material-icons-outlined">content_copy</span>
+              <span>Copy</span>
+            </button>
+
+            <button type="button" class="menu-action-btn" (click)="startEdit(msg)" *ngIf="msg.senderId === 'me' && !msg.isDeletedForEveryone">
+              <span class="material-icons-outlined">edit</span>
+              <span>Edit</span>
+            </button>
+
+            <button type="button" class="menu-action-btn btn-delete" (click)="confirmDelete(msg)">
+              <span class="material-icons-outlined">delete_outline</span>
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Message Bubble Body -->
         <div class="message-bubble" [class.message-sent]="msg.senderId === 'me'" [class.message-received]="msg.senderId !== 'me'">
-          <!-- Image Attachment -->
-          <div *ngIf="msg.attachment?.type === 'image'" class="image-attachment-card" (click)="openLightbox(msg.attachment?.url)">
-            <img [src]="msg.attachment?.url" [alt]="msg.attachment?.name" class="attached-image" />
+          <!-- Deleted For Everyone Placeholder -->
+          <div *ngIf="msg.isDeletedForEveryone" class="deleted-msg-placeholder">
+            <span class="material-icons-outlined block-icon">block</span>
+            <span>This message was deleted</span>
           </div>
 
-          <!-- Document Attachment -->
-          <div *ngIf="msg.attachment?.type === 'file'" class="file-attachment-card">
-            <span class="material-icons-outlined file-icon">insert_drive_file</span>
-            <div class="file-meta">
-              <span class="file-name">{{ msg.attachment?.name }}</span>
-              <span class="file-size">{{ msg.attachment?.size || '1.2 MB' }}</span>
+          <ng-container *ngIf="!msg.isDeletedForEveryone">
+            <!-- Forwarded Indicator Label -->
+            <div *ngIf="msg.isForwarded" class="forwarded-indicator">
+              <span class="material-icons-outlined forwarded-icon">shortcut</span>
+              <span class="forwarded-text">Forwarded</span>
             </div>
-            <span class="material-icons-outlined download-icon">download</span>
-          </div>
 
-          <!-- Voice Note Attachment -->
-          <div *ngIf="msg.attachment?.type === 'voice'" class="voice-attachment-card">
-            <button type="button" class="btn-play-voice">
-              <span class="material-icons-outlined">play_arrow</span>
-            </button>
-            <div class="voice-waveform">
-              <span class="wave-bar h-1"></span>
-              <span class="wave-bar h-3"></span>
-              <span class="wave-bar h-2"></span>
-              <span class="wave-bar h-4"></span>
-              <span class="wave-bar h-2"></span>
-              <span class="wave-bar h-3"></span>
+            <!-- Quoted Reply Box -->
+            <div *ngIf="msg.replyTo" class="quoted-reply-box" (click)="scrollToMessage(msg.replyTo.id)">
+              <div class="quoted-sender">{{ msg.replyTo.senderName }}</div>
+              <div class="quoted-text">{{ msg.replyTo.text }}</div>
             </div>
-            <span class="voice-duration">{{ msg.attachment?.duration || '0:30' }}</span>
-          </div>
 
-          <!-- Message Text Content -->
-          <p class="message-text" *ngIf="msg.text">{{ msg.text }}</p>
+            <!-- Image Attachment -->
+            <div *ngIf="msg.attachment?.type === 'image'" class="image-attachment-card" (click)="openLightbox(msg.attachment?.url)">
+              <img [src]="msg.attachment?.url" [alt]="msg.attachment?.name" class="attached-image" />
+              <a [href]="msg.attachment?.url" [download]="msg.attachment?.name || 'download.jpg'" (click)="$event.stopPropagation()" class="media-download-badge" title="Download Image">
+                <span class="material-icons-outlined">download</span>
+              </a>
+            </div>
+
+            <!-- Video Attachment -->
+            <div *ngIf="msg.attachment?.type === 'video'" class="video-attachment-card">
+              <video [src]="msg.attachment?.url" controls class="attached-video" preload="metadata"></video>
+              <div class="video-attachment-meta" *ngIf="msg.attachment?.name">
+                <span class="material-icons-outlined video-icon">videocam</span>
+                <span class="video-filename">{{ msg.attachment?.name }}</span>
+                <a [href]="msg.attachment?.url" [download]="msg.attachment?.name || 'video.mp4'" class="video-download-icon" title="Download Video">
+                  <span class="material-icons-outlined">download</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- Document Attachment -->
+            <div *ngIf="msg.attachment?.type === 'file'" class="file-attachment-card">
+              <span class="material-icons-outlined file-icon">{{ getDocumentIcon(msg.attachment?.name, msg.attachment?.extension) }}</span>
+              <div class="file-meta">
+                <span class="file-name">{{ msg.attachment?.name }}</span>
+                <span class="file-size">
+                  <span *ngIf="msg.attachment?.extension" class="file-ext-badge">{{ msg.attachment?.extension }}</span>
+                  {{ msg.attachment?.size || '1.2 MB' }}
+                </span>
+              </div>
+              <a [href]="msg.attachment?.url" [download]="msg.attachment?.name || 'document'" target="_blank" class="download-icon-link" title="Download / Open Document">
+                <span class="material-icons-outlined download-icon">download</span>
+              </a>
+            </div>
+
+            <!-- Voice Note Attachment -->
+            <div *ngIf="msg.attachment?.type === 'voice'" class="voice-attachment-card">
+              <button type="button" class="btn-play-voice">
+                <span class="material-icons-outlined">play_arrow</span>
+              </button>
+              <div class="voice-waveform">
+                <span class="wave-bar h-1"></span>
+                <span class="wave-bar h-3"></span>
+                <span class="wave-bar h-2"></span>
+                <span class="wave-bar h-4"></span>
+                <span class="wave-bar h-2"></span>
+                <span class="wave-bar h-3"></span>
+              </div>
+              <span class="voice-duration">{{ msg.attachment?.duration || '0:30' }}</span>
+            </div>
+
+            <!-- Upload Progress & Status Bar -->
+            <div class="upload-status-wrapper" *ngIf="msg.attachment?.uploadStatus === 'uploading' || msg.attachment?.uploadStatus === 'failed'">
+              <div *ngIf="msg.attachment?.uploadStatus === 'uploading'" class="upload-progress-container">
+                <div class="upload-progress-bar">
+                  <div class="upload-progress-fill" [style.width.%]="msg.attachment?.uploadProgress || 0"></div>
+                </div>
+                <span class="upload-progress-text">Uploading {{ msg.attachment?.uploadProgress || 0 }}%</span>
+              </div>
+
+              <div *ngIf="msg.attachment?.uploadStatus === 'failed'" class="upload-failed-container">
+                <span class="material-icons-outlined error-icon">error_outline</span>
+                <span class="failed-text">Upload Failed</span>
+                <button type="button" class="btn-retry-upload" (click)="retryUpload(msg)">Retry</button>
+              </div>
+            </div>
+
+            <!-- Message Text Content -->
+            <p class="message-text" *ngIf="msg.text">{{ msg.text }}</p>
+          </ng-container>
+        </div>
+
+        <!-- Message Reactions Display Badges -->
+        <div class="reactions-badge-row" *ngIf="!msg.isDeletedForEveryone && msg.reactions && msg.reactions.length > 0">
+          <span
+            *ngFor="let r of msg.reactions"
+            class="reaction-pill"
+            [class.user-reacted]="r.users.includes('me')"
+            (click)="addReaction(msg, r.emoji)"
+          >
+            <span class="reaction-emoji">{{ r.emoji }}</span>
+            <span class="reaction-count">{{ r.count }}</span>
+          </span>
         </div>
 
         <!-- Timestamp & Read Receipt -->
         <div class="message-footer">
           <span class="message-time">{{ msg.timeStr }}</span>
-          <span class="material-icons-outlined read-receipt" *ngIf="msg.senderId === 'me'">done_all</span>
+          <span class="edited-indicator" *ngIf="msg.isEdited && !msg.isDeletedForEveryone">• Edited</span>
+          <ng-container *ngIf="msg.senderId === 'me' && !msg.isDeletedForEveryone">
+            <span class="message-status-badge" [class.seen]="msg.status === 'seen' || msg.isRead">
+              <span class="material-icons-outlined read-receipt-icon">{{ (msg.status === 'seen' || msg.isRead) ? 'done_all' : 'done' }}</span>
+              <span class="status-text">{{ (msg.status === 'seen' || msg.isRead) ? 'Seen' : 'Delivered' }}</span>
+            </span>
+          </ng-container>
         </div>
       </div>
     </div>
@@ -121,6 +303,68 @@
 
   <!-- Message Input Bar Footer -->
   <footer class="chat-input-footer" *ngIf="contact">
+    <!-- Staged Files Preview Banner -->
+    <div class="staged-files-banner" *ngIf="stagedFiles.length > 0">
+      <div class="staged-files-header">
+        <span class="staged-title">📎 Selected Media / Files ({{ stagedFiles.length }})</span>
+        <button type="button" class="btn-clear-staged" (click)="clearStagedFiles()">Clear All</button>
+      </div>
+
+      <div class="staged-files-scroll">
+        <div *ngFor="let item of stagedFiles" class="staged-file-chip">
+          <!-- Thumbnail preview for image -->
+          <div class="staged-thumb-wrapper" *ngIf="item.type === 'image'">
+            <img [src]="item.previewUrl" [alt]="item.name" class="staged-thumb" />
+          </div>
+          <!-- Video preview thumbnail icon -->
+          <div class="staged-thumb-wrapper staged-video-thumb" *ngIf="item.type === 'video'">
+            <span class="material-icons-outlined staged-icon">videocam</span>
+          </div>
+          <!-- Document icon -->
+          <div class="staged-thumb-wrapper staged-doc-thumb" *ngIf="item.type === 'file'">
+            <span class="material-icons-outlined staged-icon">{{ getDocumentIcon(item.name, item.extension) }}</span>
+          </div>
+
+          <div class="staged-file-info">
+            <span class="staged-file-name" [title]="item.name">{{ item.name }}</span>
+            <span class="staged-file-meta">{{ item.extension ? item.extension + ' • ' : '' }}{{ item.sizeStr }}</span>
+          </div>
+
+          <button type="button" class="btn-remove-staged" (click)="removeStagedFile(item.id)" title="Remove file">
+            <span class="material-icons-outlined">close</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Replying Preview Banner -->
+    <div class="context-banner reply-banner" *ngIf="replyingToMessage">
+      <div class="banner-content">
+        <span class="material-icons-outlined banner-icon">reply</span>
+        <div class="banner-text">
+          <span class="banner-label">Replying to <strong>{{ replyingToMessage.senderName }}</strong></span>
+          <span class="banner-subtext">{{ replyingToMessage.text }}</span>
+        </div>
+      </div>
+      <button type="button" class="btn-close-banner" (click)="cancelReply()">
+        <span class="material-icons-outlined">close</span>
+      </button>
+    </div>
+
+    <!-- Editing Preview Banner -->
+    <div class="context-banner edit-banner" *ngIf="editingMessage">
+      <div class="banner-content">
+        <span class="material-icons-outlined banner-icon">edit</span>
+        <div class="banner-text">
+          <span class="banner-label">Editing Message</span>
+          <span class="banner-subtext">{{ editingMessage.text }}</span>
+        </div>
+      </div>
+      <button type="button" class="btn-close-banner" (click)="cancelEdit()">
+        <span class="material-icons-outlined">close</span>
+      </button>
+    </div>
+
     <div class="input-bar-wrapper">
       <!-- Actions Button -->
       <button type="button" class="btn-input-action" (click)="toggleAttachMenu()" title="Attach File">
@@ -131,7 +375,7 @@
       <div class="text-input-container">
         <textarea
           class="chat-textarea"
-          placeholder="Whisper something..."
+          [placeholder]="editingMessage ? 'Edit your message...' : (stagedFiles.length > 0 ? 'Add a caption...' : 'Whisper something...')"
           rows="1"
           [(ngModel)]="newMessageText"
           (keydown)="onKeyDown($event)"
@@ -156,20 +400,24 @@
       </button>
 
       <!-- Send Button -->
-      <button type="button" class="btn-send" (click)="onSend()" [disabled]="!newMessageText.trim()">
-        <span class="material-icons-outlined">favorite</span>
+      <button type="button" class="btn-send" (click)="onSend()" [disabled]="(!newMessageText.trim() && stagedFiles.length === 0) || isUploadingStaged">
+        <span class="material-icons-outlined">{{ editingMessage ? 'check' : 'favorite' }}</span>
       </button>
     </div>
 
     <!-- Attachment Menu Popover -->
     <div class="popover-menu attach-menu" *ngIf="showAttachMenu">
-      <button type="button" class="popover-item" (click)="sendImageAttachment()">
-        <span class="material-icons-outlined item-icon icon-purple">image</span>
-        <span>Photos & Videos</span>
+      <button type="button" class="popover-item" (click)="triggerGalleryPicker()">
+        <span class="material-icons-outlined item-icon icon-purple">photo_library</span>
+        <span>Gallery (Photos & Videos)</span>
       </button>
-      <button type="button" class="popover-item" (click)="sendFileAttachment()">
-        <span class="material-icons-outlined item-icon icon-blue">description</span>
-        <span>Document / PDF</span>
+      <button type="button" class="popover-item" (click)="triggerDocumentPicker()">
+        <span class="material-icons-outlined item-icon icon-blue">folder_open</span>
+        <span>File Manager (Documents)</span>
+      </button>
+      <button type="button" class="popover-item" (click)="triggerCameraPicker()">
+        <span class="material-icons-outlined item-icon icon-purple">photo_camera</span>
+        <span>Camera</span>
       </button>
       <button type="button" class="popover-item" (click)="toggleVoiceRecording()">
         <span class="material-icons-outlined item-icon icon-pink">mic</span>
@@ -196,6 +444,74 @@
       <button type="button" class="btn-close-lightbox" (click)="closeLightbox()">
         <span class="material-icons-outlined">close</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Forward Messages Contact Selector Modal Overlay -->
+  <div class="modal-overlay" *ngIf="showForwardModal" (click)="closeForwardModal()">
+    <div class="modal-card forward-modal-card glass-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="forward-header-title">
+          <h3>Forward to...</h3>
+          <span class="forward-subtitle">Selected {{ messagesToForward.length }} message{{ messagesToForward.length === 1 ? '' : 's' }}</span>
+        </div>
+        <button type="button" class="btn-close-modal" (click)="closeForwardModal()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Forward Search Input -->
+      <div class="forward-search-wrapper">
+        <span class="material-icons-outlined search-icon">search</span>
+        <input
+          type="text"
+          class="forward-search-input"
+          placeholder="Search contacts by name or phone..."
+          [(ngModel)]="forwardSearchQuery"
+        />
+      </div>
+
+      <!-- Contact Selector List -->
+      <div class="forward-contacts-list">
+        <div
+          *ngFor="let contactItem of getFilteredForwardContacts()"
+          class="forward-contact-row"
+          [class.selected]="isForwardContactSelected(contactItem.id)"
+          (click)="toggleForwardContact(contactItem.id)"
+        >
+          <div class="forward-contact-avatar-wrapper">
+            <img [src]="contactItem.avatar" [alt]="contactItem.name" class="forward-contact-avatar" />
+            <span class="forward-status-dot" [class.online]="contactItem.isOnline"></span>
+          </div>
+
+          <div class="forward-contact-meta">
+            <span class="forward-contact-name">{{ contactItem.name }}</span>
+            <span class="forward-contact-status">{{ contactItem.statusText || contactItem.phone }}</span>
+          </div>
+
+          <div class="forward-checkbox" [class.checked]="isForwardContactSelected(contactItem.id)">
+            <span class="material-icons-outlined check-icon" *ngIf="isForwardContactSelected(contactItem.id)">check</span>
+          </div>
+        </div>
+
+        <div class="empty-forward-contacts" *ngIf="getFilteredForwardContacts().length === 0">
+          No contacts found matching "{{ forwardSearchQuery }}"
+        </div>
+      </div>
+
+      <!-- Modal Actions -->
+      <div class="modal-footer forward-modal-footer">
+        <button type="button" class="btn-modal-cancel" (click)="closeForwardModal()">Cancel</button>
+        <button
+          type="button"
+          class="btn-modal-submit btn-send-forward"
+          (click)="confirmForward()"
+          [disabled]="selectedForwardContactIds.size === 0"
+        >
+          <span>Send</span>
+          <span *ngIf="selectedForwardContactIds.size > 0">({{ selectedForwardContactIds.size }})</span>
+        </button>
+      </div>
     </div>
   </div>
 </main>

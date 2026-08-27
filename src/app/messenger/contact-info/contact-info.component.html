@@ -23,6 +23,9 @@
         <button type="button" class="btn-action-round" [class.active]="contact.isFavorite" (click)="onStarClick()" title="Favorite">
           <span class="material-icons-outlined">{{ contact.isFavorite ? 'star' : 'star_border' }}</span>
         </button>
+        <button type="button" class="btn-action-round" (click)="onEditClick()" title="Edit Contact">
+          <span class="material-icons-outlined">edit</span>
+        </button>
         <button type="button" class="btn-action-round" [class.active]="isMuted" (click)="toggleMute()" title="Mute Notifications">
           <span class="material-icons-outlined">{{ isMuted ? 'notifications_off' : 'notifications' }}</span>
         </button>
@@ -109,15 +112,20 @@
 
     <!-- Options / Settings -->
     <div class="options-block">
+      <button type="button" class="option-row" (click)="onEditClick()">
+        <span class="material-icons-outlined option-icon">edit</span>
+        <span class="option-label">Edit Contact Details</span>
+      </button>
+
       <button type="button" class="option-row" (click)="toggleMute()">
         <span class="material-icons-outlined option-icon">notifications_none</span>
         <span class="option-label">Mute Notifications</span>
         <span class="toggle-switch" [class.on]="isMuted"></span>
       </button>
 
-      <button type="button" class="option-row block-row" (click)="toggleBlock()">
-        <span class="material-icons-outlined option-icon icon-red">block</span>
-        <span class="option-label label-red">{{ isBlocked ? 'Unblock Contact' : 'Block Contact' }}</span>
+      <button type="button" class="option-row block-row" (click)="onDeleteClick()">
+        <span class="material-icons-outlined option-icon icon-red">delete_outline</span>
+        <span class="option-label label-red">Delete Contact</span>
       </button>
     </div>
   </div>

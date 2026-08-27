@@ -623,3 +623,114 @@
 
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
 .btn-modal-cancel { background: transparent; border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.7); padding: 8px 16px; border-radius: 10px; cursor: pointer; }
+
+/* ADD CONTACT MODAL STYLES */
+.contact-form-card {
+  max-width: 440px;
+}
+
+.form-error-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: #fca5a5;
+  font-size: 0.8rem;
+  margin-bottom: 14px;
+}
+
+.error-icon {
+  font-size: 1.1rem;
+  color: #ef4444;
+}
+
+.avatar-picker-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.avatar-preview-wrapper {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #e0b0ff;
+  box-shadow: 0 0 16px rgba(224, 176, 255, 0.4);
+}
+
+.picker-preview-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-presets-grid {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0;
+  overflow-x: auto;
+  padding: 4px;
+  max-width: 100%;
+}
+
+.preset-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  cursor: pointer;
+  border: 2px solid transparent;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.preset-thumb:hover, .preset-thumb.selected {
+  opacity: 1;
+  border-color: #e0b0ff;
+  transform: scale(1.1);
+}
+
+.custom-url-input {
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+.btn-save-contact {
+  background: #e0b0ff;
+  color: #051424;
+  border: none;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 8px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-save-contact:hover {
+  background: #fff;
+  box-shadow: 0 0 16px rgba(224, 176, 255, 0.6);
+  transform: scale(1.03);
+}
+
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.15);
+}

@@ -12,12 +12,22 @@ export class ContactInfoComponent {
 
   @Output() closeInfo = new EventEmitter<void>();
   @Output() toggleFavorite = new EventEmitter<Contact>();
+  @Output() editContact = new EventEmitter<Contact>();
+  @Output() deleteContact = new EventEmitter<Contact>();
 
   activeTab: 'media' | 'docs' | 'links' = 'media';
   isMuted = false;
   isBlocked = false;
 
   lightboxUrl: string | null = null;
+
+  onEditClick(): void {
+    if (this.contact) this.editContact.emit(this.contact);
+  }
+
+  onDeleteClick(): void {
+    if (this.contact) this.deleteContact.emit(this.contact);
+  }
 
   setTab(tab: 'media' | 'docs' | 'links'): void {
     this.activeTab = tab;

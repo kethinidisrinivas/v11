@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Contact, Message, SharedMedia, User, Attachment, StatusItem, UserStatusGroup, CallLog } from './messenger.model';
+import { Contact, Message, QuotedMessagePreview, SharedMedia, User, Attachment, StatusItem, UserStatusGroup, CallLog, MessageReaction } from './messenger.model';
 import { AuthService, UserRecord } from '../services/auth.service';
 
 @Injectable({
@@ -114,6 +114,16 @@ export class MessengerService {
         timestamp: new Date(Date.now() - 3600000 * 2),
         timeStr: '10:42 AM',
         isRead: true
+      },
+      {
+        id: 'msg_s2',
+        senderId: 'me',
+        senderName: 'Me',
+        text: 'I booked the balcony room for us! 🌲✨',
+        timestamp: new Date(Date.now() - 3600000 * 1.5),
+        timeStr: '10:50 AM',
+        isRead: true,
+        status: 'seen'
       }
     ],
     emma: [
@@ -131,10 +141,41 @@ export class MessengerService {
 
   private selectedContactSubject = new BehaviorSubject<Contact | null>(this.contacts[0]);
   private typingContactSubject = new BehaviorSubject<{ contactId: string; name: string } | null>(null);
+  private messagesSubject = new BehaviorSubject<{ contactId: string; messages: Message[] } | null>(null);
 
   constructor(private authService: AuthService) {
+    this.loadContactsFromStorage();
     this.syncCurrentUser();
+    this.syncContactAvatars();
     this.initDefaultStatuses();
+
+    this.authService.avatarChanged$.subscribe(() => {
+      this.syncContactAvatars();
+    });
+  }
+
+  syncContactAvatars(): void {
+    const sessUser = this.authService.getCurrentUser();
+    if (sessUser) {
+      this.currentUser.avatar = sessUser.avatar;
+    }
+
+    this.contacts.forEach(c => {
+      const globalAvatar = this.authService.getUserAvatar(c.phone || c.id);
+      if (globalAvatar) {
+        c.avatar = globalAvatar;
+      }
+    });
+
+    this.saveContactsToStorage();
+
+    const currentSelected = this.selectedContactSubject.value;
+    if (currentSelected) {
+      const updated = this.contacts.find(c => c.id === currentSelected.id);
+      if (updated) {
+        this.selectedContactSubject.next({ ...updated });
+      }
+    }
   }
 
   private initDefaultStatuses(): void {
@@ -402,14 +443,75 @@ export class MessengerService {
     }
   }
 
+  getMessagesSubject(): Observable<{ contactId: string; messages: Message[] } | null> {
+    return this.messagesSubject.asObservable();
+  }
+
+  private notifyMessagesUpdated(contactId: string): void {
+    const msgs = this.getMessages(contactId);
+    this.messagesSubject.next({ contactId, messages: [...msgs] });
+  }
+
+  markMessagesAsSeenByRecipient(contactId: string): void {
+    const msgs = this.messagesMap[contactId];
+    if (msgs && msgs.length > 0) {
+      let updated = false;
+      msgs.forEach(m => {
+        if (m.senderId === 'me' && (!m.isRead || m.status !== 'seen')) {
+          m.isRead = true;
+          m.status = 'seen';
+          updated = true;
+        }
+      });
+      if (updated) {
+        this.saveMessagesToStorage();
+        this.notifyMessagesUpdated(contactId);
+        this.updateReadStatusOnBackend(contactId, 'seen');
+      }
+    }
+  }
+
+  markIncomingMessagesAsRead(contactId: string): void {
+    const contact = this.contacts.find(c => c.id === contactId);
+    if (contact) {
+      contact.unreadCount = 0;
+    }
+    const msgs = this.messagesMap[contactId];
+    if (msgs && msgs.length > 0) {
+      let updated = false;
+      msgs.forEach(m => {
+        if (m.senderId !== 'me' && !m.isRead) {
+          m.isRead = true;
+          updated = true;
+        }
+      });
+      if (updated) {
+        this.saveMessagesToStorage();
+        this.notifyMessagesUpdated(contactId);
+      }
+    }
+  }
+
+  /**
+   * Backend Read-Receipt Connector API
+   * Connects local state mutations to remote backend API when endpoint is available.
+   */
+  updateReadStatusOnBackend(contactId: string, status: 'delivered' | 'seen'): void {
+    // Backend API hook structure placeholder for future backend connectivity:
+    // e.g. return this.http.patch(`/api/conversations/${contactId}/read-status`, { status });
+  }
+
   selectContact(contact: Contact): void {
-    contact.unreadCount = 0;
+    this.markIncomingMessagesAsRead(contact.id);
     this.selectedContactSubject.next(contact);
+    // Mark my sent messages to this contact as Seen when receiver has chat open
+    this.markMessagesAsSeenByRecipient(contact.id);
   }
 
   getMessages(contactId: string): Message[] {
     this.loadMessagesFromStorage();
-    return this.messagesMap[contactId] || [];
+    const raw = this.messagesMap[contactId] || [];
+    return raw.filter(m => !m.deletedForUsers || !m.deletedForUsers.includes('me'));
   }
 
   getTotalUnreadCount(): number {
@@ -417,13 +519,81 @@ export class MessengerService {
   }
 
   deleteMessage(contactId: string, messageId: string): void {
-    if (this.messagesMap[contactId]) {
-      this.messagesMap[contactId] = this.messagesMap[contactId].filter(m => m.id !== messageId);
-      this.saveMessagesToStorage();
+    this.deleteMessageForMe(contactId, messageId);
+  }
+
+  deleteMessageForMe(contactId: string, messageId: string): void {
+    const msgs = this.messagesMap[contactId];
+    if (msgs) {
+      const msg = msgs.find(m => m.id === messageId);
+      if (msg) {
+        if (!msg.deletedForUsers) msg.deletedForUsers = [];
+        if (!msg.deletedForUsers.includes('me')) {
+          msg.deletedForUsers.push('me');
+        }
+        this.saveMessagesToStorage();
+        this.notifyMessagesUpdated(contactId);
+      }
     }
   }
 
-  sendMessage(contactId: string, text: string, attachment?: Attachment): void {
+  deleteMessageForEveryone(contactId: string, messageId: string): void {
+    const msgs = this.messagesMap[contactId];
+    if (msgs) {
+      const msg = msgs.find(m => m.id === messageId);
+      if (msg && msg.senderId === 'me') {
+        msg.isDeletedForEveryone = true;
+        msg.text = '';
+        msg.attachment = undefined;
+        msg.reactions = [];
+        this.saveMessagesToStorage();
+        this.notifyMessagesUpdated(contactId);
+      }
+    }
+  }
+
+  editMessage(contactId: string, messageId: string, newText: string): void {
+    const msgs = this.messagesMap[contactId];
+    if (msgs) {
+      const msg = msgs.find(m => m.id === messageId);
+      if (msg && msg.senderId === 'me' && !msg.isDeletedForEveryone) {
+        msg.text = newText;
+        msg.isEdited = true;
+        this.saveMessagesToStorage();
+        this.notifyMessagesUpdated(contactId);
+      }
+    }
+  }
+
+  toggleReaction(contactId: string, messageId: string, emoji: string, userId: string = 'me'): void {
+    const msgs = this.messagesMap[contactId];
+    if (msgs) {
+      const msg = msgs.find(m => m.id === messageId);
+      if (msg && !msg.isDeletedForEveryone) {
+        if (!msg.reactions) msg.reactions = [];
+        let reaction = msg.reactions.find(r => r.emoji === emoji);
+
+        if (!reaction) {
+          reaction = { emoji, count: 1, users: [userId] };
+          msg.reactions.push(reaction);
+        } else {
+          const userIdx = reaction.users.indexOf(userId);
+          if (userIdx > -1) {
+            reaction.users.splice(userIdx, 1);
+            reaction.count--;
+          } else {
+            reaction.users.push(userId);
+            reaction.count++;
+          }
+        }
+        msg.reactions = msg.reactions.filter(r => r.count > 0);
+        this.saveMessagesToStorage();
+        this.notifyMessagesUpdated(contactId);
+      }
+    }
+  }
+
+  sendMessage(contactId: string, text: string, attachment?: Attachment, replyTo?: QuotedMessagePreview): void {
     if (!this.messagesMap[contactId]) {
       this.messagesMap[contactId] = [];
     }
@@ -438,24 +608,120 @@ export class MessengerService {
       text: text,
       timestamp: now,
       timeStr: timeStr,
-      isRead: true,
-      attachment: attachment
+      isRead: false,
+      status: 'delivered',
+      attachment: attachment,
+      replyTo: replyTo
     };
 
     this.messagesMap[contactId].push(newMsg);
     this.saveMessagesToStorage();
+    this.notifyMessagesUpdated(contactId);
 
     const contact = this.contacts.find(c => c.id === contactId);
     if (contact && contact.isOnline) {
+      // Simulate receiver opening the chat & viewing the message after short delay
+      setTimeout(() => {
+        this.markMessagesAsSeenByRecipient(contactId);
+      }, 1500);
+
       setTimeout(() => {
         this.typingContactSubject.next({ contactId: contact.id, name: contact.name });
-      }, 1000);
+      }, 2500);
 
       setTimeout(() => {
         this.typingContactSubject.next(null);
         this.appendSimulatedReply(contact);
-      }, 3200);
+      }, 4500);
     }
+  }
+
+  sendMessageWithUpload(contactId: string, text: string, attachment: Attachment, replyTo?: QuotedMessagePreview): Message {
+    if (!this.messagesMap[contactId]) {
+      this.messagesMap[contactId] = [];
+    }
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const newMsg: Message = {
+      id: 'msg_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      senderId: 'me',
+      senderName: 'Me',
+      text: text,
+      timestamp: now,
+      timeStr: timeStr,
+      isRead: false,
+      status: 'delivered',
+      attachment: attachment,
+      replyTo: replyTo
+    };
+
+    this.messagesMap[contactId].push(newMsg);
+    this.saveMessagesToStorage();
+    this.notifyMessagesUpdated(contactId);
+
+    const contact = this.contacts.find(c => c.id === contactId);
+    if (contact && contact.isOnline) {
+      setTimeout(() => {
+        this.markMessagesAsSeenByRecipient(contactId);
+      }, 1500);
+    }
+
+    return newMsg;
+  }
+
+  updateAttachmentProgress(contactId: string, messageId: string, progress: number, status: 'uploading' | 'completed' | 'failed'): void {
+    const msgs = this.messagesMap[contactId];
+    if (msgs) {
+      const msg = msgs.find(m => m.id === messageId);
+      if (msg && msg.attachment) {
+        msg.attachment.uploadProgress = progress;
+        msg.attachment.uploadStatus = status;
+        this.saveMessagesToStorage();
+        this.notifyMessagesUpdated(contactId);
+      }
+    }
+  }
+
+  forwardMessages(targetContactIds: string[], messages: Message[]): void {
+    if (!targetContactIds || targetContactIds.length === 0 || !messages || messages.length === 0) return;
+
+    targetContactIds.forEach(contactId => {
+      if (!this.messagesMap[contactId]) {
+        this.messagesMap[contactId] = [];
+      }
+
+      messages.forEach((originalMsg, idx) => {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const fwdMsg: Message = {
+          id: 'msg_fwd_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
+          senderId: 'me',
+          senderName: 'Me',
+          text: originalMsg.text || '',
+          timestamp: now,
+          timeStr: timeStr,
+          isRead: false,
+          status: 'delivered',
+          isForwarded: true,
+          attachment: originalMsg.attachment ? JSON.parse(JSON.stringify(originalMsg.attachment)) : undefined
+        };
+
+        this.messagesMap[contactId].push(fwdMsg);
+      });
+
+      this.saveMessagesToStorage();
+      this.notifyMessagesUpdated(contactId);
+
+      const contact = this.contacts.find(c => c.id === contactId);
+      if (contact && contact.isOnline) {
+        setTimeout(() => {
+          this.markMessagesAsSeenByRecipient(contactId);
+        }, 1500);
+      }
+    });
   }
 
   private loadMessagesFromStorage(): void {
@@ -492,6 +758,8 @@ export class MessengerService {
     const randomText = replies[Math.floor(Math.random() * replies.length)];
     const now = new Date();
 
+    const isCurrentChatOpen = this.selectedContactSubject.value?.id === contact.id;
+
     const replyMsg: Message = {
       id: 'msg_reply_' + Date.now(),
       senderId: contact.id,
@@ -499,14 +767,20 @@ export class MessengerService {
       text: randomText,
       timestamp: now,
       timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isRead: true
+      isRead: isCurrentChatOpen
     };
 
     if (!this.messagesMap[contact.id]) {
       this.messagesMap[contact.id] = [];
     }
     this.messagesMap[contact.id].push(replyMsg);
+
+    if (!isCurrentChatOpen) {
+      contact.unreadCount = (contact.unreadCount || 0) + 1;
+    }
+
     this.saveMessagesToStorage();
+    this.notifyMessagesUpdated(contact.id);
   }
 
   addContactFromRegisteredUser(user: UserRecord): Contact {
@@ -527,23 +801,162 @@ export class MessengerService {
 
     this.contacts.unshift(newContact);
     this.messagesMap[contactId] = [];
+    this.saveContactsToStorage();
     return newContact;
   }
 
-  addContact(name: string, phone?: string, about?: string): Contact {
+  normalizePhone(phone?: string): string {
+    if (!phone) return '';
+    return phone.replace(/[^0-9+]/g, '');
+  }
+
+  isValidPhoneNumber(phone: string): boolean {
+    const norm = this.normalizePhone(phone);
+    if (!norm) return false;
+    const digitsOnly = norm.replace(/\+/g, '');
+    return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+  }
+
+  saveContact(data: {
+    name: string;
+    phone: string;
+    avatar?: string;
+    about?: string;
+  }): { success: boolean; contact?: Contact; error?: string } {
+    const trimmedName = (data.name || '').trim();
+    const trimmedPhone = (data.phone || '').trim();
+
+    if (!trimmedName) {
+      return { success: false, error: 'Contact name is required.' };
+    }
+
+    if (!trimmedPhone) {
+      return { success: false, error: 'Phone number is required.' };
+    }
+
+    if (!this.isValidPhoneNumber(trimmedPhone)) {
+      return { success: false, error: 'Please enter a valid phone number (7-15 digits).' };
+    }
+
+    const normPhone = this.normalizePhone(trimmedPhone);
+
+    const existing = this.contacts.find(c => this.normalizePhone(c.phone) === normPhone);
+    if (existing) {
+      return { success: false, error: `Contact with phone number "${trimmedPhone}" already exists (${existing.name}).` };
+    }
+
     const newContact: Contact = {
       id: 'c_' + Date.now(),
-      name: name,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
-      statusText: about || 'Hey there! Using Messenger Sanctuary.',
+      name: trimmedName,
+      phone: trimmedPhone,
+      avatar: data.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(trimmedName)}&background=e0b0ff&color=051424`,
+      statusText: data.about || 'Hey there! Using Messenger',
+      about: data.about || 'Connected friend in Messenger',
       isOnline: true,
       unreadCount: 0,
-      phone: phone || '+1 (555) ' + Math.floor(100 + Math.random() * 900) + '-' + Math.floor(1000 + Math.random() * 9000),
-      about: about || 'Connected friend in Sanctuary.'
+      createdAt: new Date().toISOString(),
+      userId: this.currentUser.id
     };
+
     this.contacts.unshift(newContact);
     this.messagesMap[newContact.id] = [];
-    return newContact;
+    this.saveContactsToStorage();
+    this.selectContact(newContact);
+
+    return { success: true, contact: newContact };
+  }
+
+  private loadContactsFromStorage(): void {
+    try {
+      const userKey = `sanctuary_contacts_${this.currentUser.id}`;
+      let saved = localStorage.getItem(userKey);
+      if (!saved) {
+        saved = localStorage.getItem('sanctuary_contacts');
+      }
+      if (saved) {
+        const parsed: Contact[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.contacts = parsed;
+          this.contacts.forEach(c => {
+            if (!this.messagesMap[c.id]) {
+              this.messagesMap[c.id] = [];
+            }
+          });
+        }
+      }
+    } catch (e) {}
+  }
+
+  saveContactsToStorage(): void {
+    try {
+      const userKey = `sanctuary_contacts_${this.currentUser.id}`;
+      localStorage.setItem(userKey, JSON.stringify(this.contacts));
+      localStorage.setItem('sanctuary_contacts', JSON.stringify(this.contacts));
+    } catch (e) {}
+  }
+
+  updateContact(
+    contactId: string,
+    data: { name: string; phone: string; avatar?: string; about?: string }
+  ): { success: boolean; contact?: Contact; error?: string } {
+    const contact = this.contacts.find(c => c.id === contactId);
+    if (!contact) {
+      return { success: false, error: 'Contact not found.' };
+    }
+
+    const trimmedName = (data.name || '').trim();
+    const trimmedPhone = (data.phone || '').trim();
+
+    if (!trimmedName) {
+      return { success: false, error: 'Contact name is required.' };
+    }
+
+    if (!trimmedPhone) {
+      return { success: false, error: 'Phone number is required.' };
+    }
+
+    if (!this.isValidPhoneNumber(trimmedPhone)) {
+      return { success: false, error: 'Please enter a valid phone number (7-15 digits).' };
+    }
+
+    const normPhone = this.normalizePhone(trimmedPhone);
+    const existing = this.contacts.find(c => c.id !== contactId && this.normalizePhone(c.phone) === normPhone);
+    if (existing) {
+      return { success: false, error: `Phone number is already used by contact "${existing.name}".` };
+    }
+
+    contact.name = trimmedName;
+    contact.phone = trimmedPhone;
+    if (data.avatar) contact.avatar = data.avatar;
+    if (data.about) {
+      contact.about = data.about;
+      contact.statusText = data.about;
+    }
+
+    this.saveContactsToStorage();
+    if (this.selectedContactSubject.value?.id === contactId) {
+      this.selectedContactSubject.next({ ...contact });
+    }
+
+    return { success: true, contact };
+  }
+
+  deleteContact(contactId: string): void {
+    const idx = this.contacts.findIndex(c => c.id === contactId);
+    if (idx !== -1) {
+      this.contacts.splice(idx, 1);
+      delete this.messagesMap[contactId];
+      this.saveContactsToStorage();
+
+      if (this.selectedContactSubject.value?.id === contactId) {
+        const nextContact = this.contacts.length > 0 ? this.contacts[0] : null;
+        if (nextContact) {
+          this.selectContact(nextContact);
+        } else {
+          this.selectedContactSubject.next(null);
+        }
+      }
+    }
   }
 
   getSharedMedia(contactId: string): SharedMedia {

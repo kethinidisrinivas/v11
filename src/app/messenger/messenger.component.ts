@@ -12,6 +12,19 @@ import { Contact, Message, SharedMedia, User, CallState, LinkedDevice } from './
 })
 export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('shaderCanvas', { static: false }) shaderCanvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('profileFileInput') profileFileInput!: ElementRef<HTMLInputElement>;
+
+  lightboxImageUrl: string | null = null;
+
+  avatarPresets = [
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face'
+  ];
 
   currentUser!: User;
   contacts: Contact[] = [];
@@ -80,6 +93,15 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
         this.typingStatus = status;
         if (status && this.selectedContact?.id === status.contactId) {
           this.activeMessages = this.messengerService.getMessages(status.contactId);
+        }
+      })
+    );
+
+    // Subscribe to real-time message updates (for dynamic Seen status transitions)
+    this.subscriptions.add(
+      this.messengerService.getMessagesSubject().subscribe(update => {
+        if (update && this.selectedContact?.id === update.contactId) {
+          this.activeMessages = update.messages;
         }
       })
     );
@@ -159,11 +181,73 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showMobileChat = true;
   }
 
-  onSendMessage(event: { text: string; attachment?: any }): void {
+  onSendMessage(event: { text: string; attachment?: any; replyTo?: any }): void {
     if (!this.selectedContact) return;
-    this.messengerService.sendMessage(this.selectedContact.id, event.text, event.attachment);
+    this.messengerService.sendMessage(this.selectedContact.id, event.text, event.attachment, event.replyTo);
     this.activeMessages = this.messengerService.getMessages(this.selectedContact.id);
     this.sharedMedia = this.messengerService.getSharedMedia(this.selectedContact.id);
+  }
+
+  // Contact Edit & Delete State
+  showEditContactModal = false;
+  editingContactForm = {
+    id: '',
+    name: '',
+    phone: '',
+    avatar: '',
+    about: ''
+  };
+  editFormError = '';
+  deletingContact: Contact | null = null;
+
+  openEditContactModal(contact: Contact): void {
+    this.editingContactForm = {
+      id: contact.id,
+      name: contact.name,
+      phone: contact.phone || '',
+      avatar: contact.avatar,
+      about: contact.about || contact.statusText || ''
+    };
+    this.editFormError = '';
+    this.showEditContactModal = true;
+  }
+
+  closeEditContactModal(): void {
+    this.showEditContactModal = false;
+    this.editFormError = '';
+  }
+
+  saveEditedContact(): void {
+    const res = this.messengerService.updateContact(
+      this.editingContactForm.id,
+      this.editingContactForm
+    );
+    if (!res.success) {
+      this.editFormError = res.error || 'Failed to update contact.';
+      return;
+    }
+
+    this.contacts = this.messengerService.getContacts();
+    this.showToast('Contact details updated! 💖');
+    this.closeEditContactModal();
+  }
+
+  openDeleteContactConfirm(contact: Contact): void {
+    this.deletingContact = contact;
+  }
+
+  closeDeleteContactConfirm(): void {
+    this.deletingContact = null;
+  }
+
+  confirmDeleteContact(): void {
+    if (this.deletingContact) {
+      const deletedName = this.deletingContact.name;
+      this.messengerService.deleteContact(this.deletingContact.id);
+      this.contacts = this.messengerService.getContacts();
+      this.showToast(`Deleted contact "${deletedName}"`);
+      this.closeDeleteContactConfirm();
+    }
   }
 
   toggleRightInfo(): void {
@@ -174,28 +258,59 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showMobileChat = false;
   }
 
-  // --- New Chat Modal ---
-  openNewChatModal(): void {
-    this.showNewChatModal = true;
+  // --- Profile Picture Management ---
+  openLightbox(url?: string): void {
+    if (url) {
+      this.lightboxImageUrl = url;
+    }
   }
 
-  closeNewChatModal(): void {
-    this.showNewChatModal = false;
-    this.newContactName = '';
-    this.newContactPhone = '';
-    this.newContactAbout = '';
+  closeLightbox(): void {
+    this.lightboxImageUrl = null;
   }
 
-  createNewContact(): void {
-    if (!this.newContactName.trim()) return;
-    const newC = this.messengerService.addContact(
-      this.newContactName.trim(),
-      this.newContactPhone.trim(),
-      this.newContactAbout.trim()
-    );
-    this.contacts = this.messengerService.getContacts();
-    this.onSelectContact(newC);
-    this.closeNewChatModal();
+  triggerProfileUpload(): void {
+    if (this.profileFileInput) {
+      this.profileFileInput.nativeElement.click();
+    }
+  }
+
+  onProfileFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    if (!file.type.startsWith('image/')) {
+      this.showToast('Please select a valid image file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      this.authService.updateProfilePicture(dataUrl);
+      this.currentUser = { ...this.currentUser, avatar: dataUrl };
+      this.messengerService.syncContactAvatars();
+      this.showToast('Profile picture updated! 📸');
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+  }
+
+  removeProfilePicture(): void {
+    this.authService.removeProfilePicture();
+    const updatedUser = this.authService.getCurrentUser();
+    if (updatedUser) {
+      this.currentUser = { ...this.currentUser, avatar: updatedUser.avatar };
+    }
+    this.messengerService.syncContactAvatars();
+    this.showToast('Profile picture removed');
+  }
+
+  selectPresetProfilePhoto(url: string): void {
+    this.authService.updateProfilePicture(url);
+    this.currentUser = { ...this.currentUser, avatar: url };
+    this.messengerService.syncContactAvatars();
+    this.showToast('Profile picture updated! 📸');
   }
 
   // --- Simulated Voice & Video Calls ---

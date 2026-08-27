@@ -19,6 +19,9 @@
     </div>
 
     <div class="header-nav-actions">
+      <button type="button" class="btn-icon" (click)="openAddContactModal()" title="Add New Contact">
+        <span class="material-icons-outlined">person_add</span>
+      </button>
       <button type="button" class="btn-icon" (click)="setNavTab('chats')" title="Home / Chats">
         <span class="material-icons-outlined">home</span>
       </button>
@@ -520,6 +523,106 @@
         <button type="button" class="btn-send-status-reply" (click)="sendStatusReply()" [disabled]="!statusReplyText.trim()">
           <span class="material-icons-outlined">send</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add New Contact Modal -->
+  <div class="modal-overlay" *ngIf="showAddContactModal" (click)="closeAddContactModal()">
+    <div class="modal-card glass-card contact-form-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>👤 Add New Contact</h3>
+        <button type="button" class="btn-close-modal" (click)="closeAddContactModal()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="form-body">
+        <!-- Native Device Contacts Picker Button -->
+        <button type="button" class="btn-import-device-contacts" (click)="importNativePhoneContact()" [disabled]="isImportingContacts" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(224, 176, 255, 0.2); border: 1px solid rgba(224, 176, 255, 0.4); border-radius: 14px; padding: 10px 16px; color: #e0b0ff; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease; margin-bottom: 14px;">
+          <span class="material-icons-outlined">contacts</span>
+          <span>{{ isImportingContacts ? 'Opening Contacts Picker...' : '📱 Import from Phone Contacts' }}</span>
+        </button>
+
+        <div class="form-divider-or" style="text-align: center; font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-bottom: 14px; position: relative;">
+          <span>or enter details manually</span>
+        </div>
+
+        <!-- Success Alert -->
+        <div class="form-success-alert" *ngIf="formSuccess" style="display: flex; align-items: center; gap: 8px; background: rgba(52, 211, 153, 0.2); border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 12px; padding: 8px 12px; color: #a7f3d0; font-size: 0.8rem; margin-bottom: 12px;">
+          <span class="material-icons-outlined" style="font-size: 1.1rem; color: #34d399;">check_circle_outline</span>
+          <span>{{ formSuccess }}</span>
+        </div>
+
+        <!-- Error Alert -->
+        <div class="form-error-alert" *ngIf="formError">
+          <span class="material-icons-outlined error-icon">error_outline</span>
+          <span>{{ formError }}</span>
+        </div>
+
+        <!-- Full Name Field -->
+        <div class="form-group">
+          <label class="form-label">Full Name *</label>
+          <input
+            type="text"
+            class="form-input"
+            placeholder="e.g. Sarah Jenkins"
+            [(ngModel)]="contactForm.name"
+            required
+          />
+        </div>
+
+        <!-- Phone Field with Country Code Selection -->
+        <div class="form-group">
+          <label class="form-label">Phone Number *</label>
+          <div class="phone-input-combined" style="display: flex; gap: 8px;">
+            <select class="form-input country-code-select" [(ngModel)]="contactForm.selectedCountryCode" style="width: 110px; background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 6px 8px; font-size: 0.85rem; outline: none; cursor: pointer;">
+              <option *ngFor="let c of countryCodes" [value]="c.dialCode" style="background: #051424; color: #fff;">
+                {{ c.flag }} {{ c.dialCode }}
+              </option>
+            </select>
+
+            <input
+              type="tel"
+              class="form-input"
+              style="flex: 1;"
+              placeholder="e.g. 9876543210"
+              [(ngModel)]="contactForm.phone"
+              required
+            />
+          </div>
+        </div>
+
+        <!-- About Field -->
+        <div class="form-group">
+          <label class="form-label">About / Status (Optional)</label>
+          <input
+            type="text"
+            class="form-input"
+            placeholder="e.g. Living in the moment 🌸"
+            [(ngModel)]="contactForm.about"
+          />
+        </div>
+
+        <!-- Avatar Selection Presets -->
+        <div class="avatar-picker-section">
+          <label class="form-label">Profile Photo Preset</label>
+          <div class="avatar-presets-grid">
+            <img
+              *ngFor="let url of avatarPresets"
+              [src]="url"
+              alt="Preset Avatar"
+              class="preset-thumb"
+              [class.selected]="contactForm.avatar === url"
+              (click)="selectAvatarPreset(url)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="closeAddContactModal()">Cancel</button>
+        <button type="button" class="btn-save-contact" (click)="saveNewContact()">Save Contact</button>
       </div>
     </div>
   </div>

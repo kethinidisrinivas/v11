@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 
 export interface LinkedDevice {
   id: string;
@@ -51,6 +51,9 @@ export class AuthService {
   private pendingOtps: Record<string, string> = {};
   private isLoggedInSubject = new BehaviorSubject<boolean>(false);
   public isLoggedIn$: Observable<boolean> = this.isLoggedInSubject.asObservable();
+
+  private avatarChangedSubject = new Subject<{ userId: string; phone: string; avatar: string }>();
+  public avatarChanged$: Observable<{ userId: string; phone: string; avatar: string }> = this.avatarChangedSubject.asObservable();
 
   constructor() {
     this.initDefaultUsers();
@@ -366,10 +369,77 @@ export class AuthService {
   }
 
   // --- Profile Management ---
+  getDefaultAvatar(name: string = 'User'): string {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=e0b0ff&color=051424&bold=true`;
+  }
+
+  getUserAvatar(userIdOrPhone?: string): string {
+    if (!userIdOrPhone) return this.getDefaultAvatar();
+    const cleanKey = userIdOrPhone.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+    try {
+      const profilesMap = JSON.parse(localStorage.getItem('sanctuary_user_profiles') || '{}');
+      if (profilesMap[cleanKey]) {
+        return profilesMap[cleanKey];
+      }
+    } catch (e) {}
+
+    const users = this.getSavedUsers();
+    for (const k of Object.keys(users)) {
+      const u = users[k];
+      if (u) {
+        const uIdClean = (u.id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const uPhoneClean = (u.phone || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        if (cleanKey === uIdClean || cleanKey === uPhoneClean) {
+          if (u.avatar) return u.avatar;
+        }
+      }
+    }
+
+    if (this.currentSession) {
+      const sessIdClean = (this.currentSession.id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const sessPhoneClean = (this.currentSession.phone || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      if (cleanKey === sessIdClean || cleanKey === sessPhoneClean) {
+        return this.currentSession.avatar;
+      }
+    }
+
+    return this.getDefaultAvatar(userIdOrPhone);
+  }
+
+  updateProfilePicture(avatarUrl: string): void {
+    if (!this.currentSession) return;
+    this.currentSession.avatar = avatarUrl;
+    this.saveCurrentSessionState();
+
+    try {
+      const profilesMap = JSON.parse(localStorage.getItem('sanctuary_user_profiles') || '{}');
+      const cleanId = (this.currentSession.id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const cleanPhone = (this.currentSession.phone || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      if (cleanId) profilesMap[cleanId] = avatarUrl;
+      if (cleanPhone) profilesMap[cleanPhone] = avatarUrl;
+      localStorage.setItem('sanctuary_user_profiles', JSON.stringify(profilesMap));
+    } catch (e) {}
+
+    this.avatarChangedSubject.next({
+      userId: this.currentSession.id,
+      phone: this.currentSession.phone,
+      avatar: avatarUrl
+    });
+  }
+
+  removeProfilePicture(): void {
+    if (!this.currentSession) return;
+    const defaultAv = this.getDefaultAvatar(this.currentSession.name);
+    this.updateProfilePicture(defaultAv);
+  }
+
   updateProfile(avatar?: string, statusText?: string, songs?: UserSong[]): void {
     if (!this.currentSession) return;
 
-    if (avatar) this.currentSession.avatar = avatar;
+    if (avatar) {
+      this.updateProfilePicture(avatar);
+    }
     if (statusText !== undefined) this.currentSession.statusText = statusText;
     if (songs) this.currentSession.songs = songs;
 

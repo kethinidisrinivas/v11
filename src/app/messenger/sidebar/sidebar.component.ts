@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Contact, User, StatusItem, UserStatusGroup, CallLog, UserSong } from '../messenger.model';
 import { AuthService, UserRecord } from '../../services/auth.service';
 import { MessengerService } from '../messenger.service';
+import { COUNTRY_CODES, findCountryByPhone, CountryCode } from '../../services/country-codes';
 
 @Component({
   selector: 'app-sidebar',
@@ -471,6 +472,147 @@ export class SidebarComponent implements OnInit, OnDestroy {
     this.toastTimeout = setTimeout(() => {
       this.toastMessage = '';
     }, 3500);
+  }
+
+  // Add Contact Modal State
+  showAddContactModal = false;
+  countryCodes: CountryCode[] = COUNTRY_CODES;
+  contactForm = {
+    name: '',
+    phone: '',
+    selectedCountryCode: '+91',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+    about: ''
+  };
+  formError = '';
+  formSuccess = '';
+  isImportingContacts = false;
+
+  avatarPresets = [
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
+    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face'
+  ];
+
+  openAddContactModal(): void {
+    this.showAddContactModal = true;
+    this.formError = '';
+    this.formSuccess = '';
+    this.contactForm = {
+      name: '',
+      phone: '',
+      selectedCountryCode: '+91',
+      avatar: this.avatarPresets[0],
+      about: ''
+    };
+  }
+
+  closeAddContactModal(): void {
+    this.showAddContactModal = false;
+    this.formError = '';
+    this.formSuccess = '';
+  }
+
+  selectAvatarPreset(url: string): void {
+    this.contactForm.avatar = url;
+  }
+
+  async importNativePhoneContact(): Promise<void> {
+    this.formError = '';
+    this.formSuccess = '';
+    this.isImportingContacts = true;
+
+    if ('contacts' in navigator && 'select' in (navigator as any).contacts) {
+      try {
+        const props = ['name', 'tel'];
+        const opts = { multiple: false };
+        const contacts = await (navigator as any).contacts.select(props, opts);
+
+        if (contacts && contacts.length > 0) {
+          const c = contacts[0];
+          const rawName = (c.name && c.name.length > 0) ? c.name[0] : '';
+          const rawTel = (c.tel && c.tel.length > 0) ? c.tel[0] : '';
+
+          if (!rawTel) {
+            this.formError = 'Selected phone contact does not contain a phone number.';
+            this.isImportingContacts = false;
+            return;
+          }
+
+          this.contactForm.name = rawName || 'Device Contact';
+
+          const cleanTel = rawTel.trim();
+          if (cleanTel.startsWith('+')) {
+            const matched = findCountryByPhone(cleanTel);
+            if (matched) {
+              this.contactForm.selectedCountryCode = matched.dialCode;
+              this.contactForm.phone = cleanTel.substring(matched.dialCode.length).trim();
+            } else {
+              this.contactForm.phone = cleanTel;
+            }
+          } else {
+            this.contactForm.phone = cleanTel.replace(/[^0-9]/g, '');
+          }
+
+          this.formSuccess = `Imported "${this.contactForm.name}" from your Phone Contacts! Click Save Contact below.`;
+          this.showToast(`Imported ${this.contactForm.name} from Phone Contacts! 📱`);
+        }
+      } catch (err: any) {
+        if (err.name === 'SecurityError' || err.name === 'NotAllowedError') {
+          this.formError = 'Permission to access phone contacts was denied.';
+        } else {
+          this.formError = 'Cancelled or unsupported phone contacts selection.';
+        }
+      } finally {
+        this.isImportingContacts = false;
+      }
+    } else {
+      this.isImportingContacts = false;
+      this.formError = 'Device Contacts Picker API is not supported on this browser. Please enter contact details manually below.';
+    }
+  }
+
+  saveNewContact(): void {
+    this.formError = '';
+    this.formSuccess = '';
+
+    const rawPhoneDigits = (this.contactForm.phone || '').trim();
+    if (!this.contactForm.name.trim()) {
+      this.formError = 'Contact name is required.';
+      return;
+    }
+    if (!rawPhoneDigits) {
+      this.formError = 'Phone number is required.';
+      return;
+    }
+
+    let fullPhone = rawPhoneDigits;
+    if (!fullPhone.startsWith('+')) {
+      fullPhone = `${this.contactForm.selectedCountryCode} ${rawPhoneDigits}`;
+    }
+
+    const res = this.messengerService.saveContact({
+      name: this.contactForm.name.trim(),
+      phone: fullPhone,
+      avatar: this.contactForm.avatar,
+      about: this.contactForm.about.trim()
+    });
+
+    if (!res.success) {
+      this.formError = res.error || 'Failed to save contact.';
+      return;
+    }
+
+    if (res.contact) {
+      this.contacts = this.messengerService.getContacts();
+      this.selectContact.emit(res.contact);
+      this.showToast(`Contact "${res.contact.name}" saved! 💖`);
+      this.closeAddContactModal();
+    }
   }
 
   filteredContactsList(): Contact[] {
