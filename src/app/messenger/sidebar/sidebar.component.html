@@ -4,9 +4,9 @@
 
   <!-- Top Profile Header & Navbar -->
   <div class="sidebar-header">
-    <div class="user-profile-badge">
+    <div class="user-profile-badge" (click)="openProfileModal.emit()" title="View & Edit My Profile" style="cursor: pointer;">
       <div class="avatar-wrapper">
-        <img [src]="currentUser.avatar" [alt]="currentUser.name" class="user-avatar" />
+        <img [src]="currentUser.avatar || 'assets/default-avatar.png'" [alt]="currentUser.name || 'Varshitha'" class="user-avatar" />
         <span class="online-indicator"></span>
       </div>
       <div class="user-info">
@@ -175,7 +175,11 @@
       <div class="calls-header-title">Call History & Logs</div>
 
       <div class="call-logs-list">
-        <div *ngFor="let call of callLogs" class="call-log-item">
+        <div *ngIf="!callLogs || callLogs.length === 0" class="empty-calls-notice" style="padding: 24px 16px; text-align: center; color: #94a3b8; font-size: 13px;">
+          No recent calls in your history. Click the Video or Voice Call icon in any chat to start calling!
+        </div>
+
+        <div *ngFor="let call of callLogs" class="call-log-item" (click)="onCallLogClick(call)" title="Click to open chat with {{ call.contactName }}" style="cursor: pointer;">
           <div class="call-avatar-wrapper">
             <img [src]="call.contactAvatar" [alt]="call.contactName" class="call-avatar" />
           </div>
@@ -183,8 +187,11 @@
           <div class="call-log-meta">
             <h4 class="call-contact-name">{{ call.contactName }}</h4>
             <div class="call-details-row">
-              <span class="material-icons-outlined call-type-icon" [class.incoming]="call.type==='incoming'" [class.outgoing]="call.type==='outgoing'" [class.missed]="call.type==='missed'">
-                {{ call.type === 'incoming' ? 'call_received' : (call.type === 'outgoing' ? 'call_made' : 'call_missed') }}
+              <span class="material-icons-outlined call-type-icon" [class.incoming]="call.type==='incoming'" [class.outgoing]="call.type==='outgoing'" [class.missed]="call.type==='missed'" [class.declined]="call.type==='declined'">
+                {{ call.type === 'incoming' ? 'call_received' : (call.type === 'outgoing' ? 'call_made' : (call.type === 'declined' ? 'call_end' : 'call_missed')) }}
+              </span>
+              <span class="call-mode-text" style="font-weight: 600; font-size: 11px; margin-right: 4px;">
+                {{ call.mode === 'video' ? '📹 Video' : '📞 Voice' }} •
               </span>
               <span class="call-timestamp">{{ call.timeStr }}</span>
             </div>
@@ -203,9 +210,16 @@
   <div class="tab-content-container" *ngIf="activeNavTab === 'profile'">
     <div class="profile-customization-section">
       <div class="profile-header-card">
-        <img [src]="profileAvatarUrl || currentUser.avatar" alt="Profile Photo" class="profile-preview-avatar" />
+        <img [src]="profileAvatarUrl || currentUser.avatar" alt="Profile Photo" class="profile-preview-avatar" (click)="openProfileModal.emit()" title="Click to open full profile" style="cursor: pointer;" />
         <h3 class="profile-username">{{ currentUser.name }}</h3>
         <span class="profile-phone-tag">{{ currentUser.phone || '+1 555 0101' }}</span>
+      </div>
+
+      <div style="margin-bottom: 14px; text-align: center;">
+        <button type="button" class="btn-save-profile" (click)="openProfileModal.emit()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; background: #e0b0ff; color: #051424;">
+          <span class="material-icons-outlined">account_circle</span>
+          <span>Open Full Profile Screen</span>
+        </button>
       </div>
 
       <div class="profile-form-block">
@@ -216,7 +230,7 @@
         <input type="text" [(ngModel)]="profileStatusText" placeholder="Living in a world of love & stars ✨" class="profile-input" />
 
         <button type="button" class="btn-save-profile" (click)="saveProfileChanges()">
-          💖 Save Profile Changes
+          💖 Quick Save Profile
         </button>
       </div>
 

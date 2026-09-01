@@ -2,11 +2,11 @@ import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 
 import { MessengerComponent } from './messenger/messenger.component';
-import { ProfileComponent } from './profile/profile.component';
 
 const routes: Routes = [
+  { path: '', redirectTo: 'messenger', pathMatch: 'full' },
   { path: 'messenger', component: MessengerComponent },
-  { path: 'profile', component: ProfileComponent }
+  { path: '**', redirectTo: 'messenger' }
 ];
 
 @NgModule({

@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewChecked, OnDestroy } from '@angular/core';
 import { Contact, Message, Attachment, QuotedMessagePreview } from '../messenger.model';
 import { MessengerService } from '../messenger.service';
+import { CameraCapturedEvent } from '../camera-modal/camera-modal.component';
 
 export interface StagedFile {
   id: string;
@@ -36,6 +37,7 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
   // Staged Files Preview State
   stagedFiles: StagedFile[] = [];
   isUploadingStaged = false;
+  showCameraModal = false;
 
   newMessageText = '';
   showEmojiPicker = false;
@@ -211,10 +213,42 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
   }
 
   triggerCameraPicker(): void {
-    if (this.cameraFileInputRef) {
-      this.cameraFileInputRef.nativeElement.click();
-    }
+    this.showCameraModal = true;
     this.showAttachMenu = false;
+  }
+
+  onCameraCapturedMedia(event: CameraCapturedEvent): void {
+    this.showCameraModal = false;
+    if (!this.contact) return;
+
+    const attachment: Attachment = {
+      name: event.fileName,
+      type: event.type,
+      url: event.url,
+      size: event.fileSizeStr,
+      mimeType: event.mimeType,
+      duration: event.duration,
+      extension: event.fileName.includes('.') ? event.fileName.split('.').pop()!.toUpperCase() : (event.type === 'image' ? 'JPG' : 'MP4'),
+      uploadProgress: 100,
+      uploadStatus: 'completed'
+    };
+
+    const textToUse = this.newMessageText.trim();
+    const replyTo = this.replyingToMessage ? { ...this.replyingToMessage } : undefined;
+
+    this.newMessageText = '';
+    this.replyingToMessage = null;
+
+    const sentMsg = this.messengerService.sendMessageWithUpload(
+      this.contact.id,
+      textToUse,
+      attachment,
+      replyTo
+    );
+
+    this.messengerService.updateAttachmentProgress(this.contact.id, sentMsg.id, 100, 'completed');
+    this.shouldScrollToBottom = true;
+    this.showToast(event.type === 'image' ? 'Photo sent' : 'Video sent');
   }
 
   onGalleryFilesSelected(event: Event): void {

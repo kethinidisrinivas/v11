@@ -400,6 +400,7 @@
 .call-type-icon.incoming { color: #34d399; }
 .call-type-icon.outgoing { color: #60a5fa; }
 .call-type-icon.missed { color: #f87171; }
+.call-type-icon.declined { color: #f59e0b; }
 .call-timestamp { font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); }
 .call-duration-badge { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 600; color: #e0b0ff; background: rgba(224, 176, 255, 0.1); padding: 4px 8px; border-radius: 8px; }
 

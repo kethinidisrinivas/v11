@@ -17,7 +17,8 @@
           [currentUser]="currentUser"
           (selectContact)="onSelectContact($event)"
           (openNewChat)="sidebarComp.openAddContactModal()"
-          (openSettings)="openSettings('profile')"
+          (openSettings)="openSettings($event)"
+          (openProfileModal)="openProfileModal()"
         ></app-sidebar>
       </div>
 
@@ -47,7 +48,7 @@
     </div>
   </div>
 
-  <!-- Settings & Linked Devices & Scanner Modal -->
+  <!-- Settings & Linked Devices & Scanner Modal (NO PROFILE INSIDE SETTINGS) -->
   <div class="modal-overlay" *ngIf="showSettingsModal" (click)="closeSettings()">
     <div class="settings-modal-card glass-card" (click)="$event.stopPropagation()">
       <div class="settings-header">
@@ -58,7 +59,7 @@
       </div>
 
       <div class="settings-body-layout">
-        <!-- Settings Subtabs -->
+        <!-- Settings Subtabs (Non-Profile Settings Only) -->
         <div class="settings-nav-sidebar">
           <button type="button" class="settings-nav-item" [class.active]="settingsActiveSection === 'linked'" (click)="settingsActiveSection = 'linked'">
             <span class="material-icons-outlined">devices</span>
@@ -67,10 +68,6 @@
           <button type="button" class="settings-nav-item" [class.active]="settingsActiveSection === 'scanner'" (click)="settingsActiveSection = 'scanner'">
             <span class="material-icons-outlined">qr_code_scanner</span>
             <span>QR Scanner</span>
-          </button>
-          <button type="button" class="settings-nav-item" [class.active]="settingsActiveSection === 'profile'" (click)="settingsActiveSection = 'profile'">
-            <span class="material-icons-outlined">person</span>
-            <span>Profile Info</span>
           </button>
           <button type="button" class="settings-nav-item logout-item" (click)="handleLogout()">
             <span class="material-icons-outlined">logout</span>
@@ -133,61 +130,215 @@
               <span *ngIf="scannerSimulating">Scanning & Authorizing Session...</span>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-          <!-- SECTION 3: PROFILE INFO -->
-          <div *ngIf="settingsActiveSection === 'profile'" class="settings-section">
-            <h4>👤 Account Profile & Photo</h4>
+  <!-- CENTRAL FOOTER PROFILE EXPERIENCE MODAL -->
+  <div class="modal-overlay" *ngIf="showProfileModal" (click)="closeProfileModal()">
+    <div class="settings-modal-card glass-card" (click)="$event.stopPropagation()" style="max-width: 540px; max-height: 90vh; overflow-y: auto;">
+      <div class="settings-header">
+        <h3>👤 Messenger Profile</h3>
+        <button type="button" class="btn-close-modal" (click)="closeProfileModal()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
 
-            <!-- Profile Picture Manager Box -->
-            <div style="display: flex; flex-direction: column; align-items: center; text-align: center; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; margin-bottom: 20px;">
-              <div style="position: relative; width: 100px; height: 100px; margin-bottom: 12px; cursor: pointer;" (click)="openLightbox(currentUser.avatar)" title="Click to view full photo">
-                <img [src]="currentUser.avatar" [alt]="currentUser.name" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid #e0b0ff; box-shadow: 0 0 16px rgba(224, 176, 255, 0.4);" />
-                <button type="button" (click)="triggerProfileUpload(); $event.stopPropagation();" style="position: absolute; bottom: 0; right: 0; background: #e0b0ff; color: #051424; border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4);" title="Upload Photo">
-                  <span class="material-icons-outlined" style="font-size: 1.1rem;">photo_camera</span>
-                </button>
-              </div>
+      <div class="settings-section advanced-profile-section" style="padding: 16px;">
+        <!-- Profile Sub-Tab Navigation Bar -->
+        <div class="profile-tabs-nav" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <button type="button" class="profile-subtab-btn" (click)="profileSubTab = 'overview'" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" [style.color]="profileSubTab === 'overview' ? '#e0b0ff' : 'rgba(255,255,255,0.6)'" [style.background]="profileSubTab === 'overview' ? 'rgba(224,176,255,0.15)' : 'transparent'">
+            📋 Overview
+          </button>
+          <button type="button" class="profile-subtab-btn" (click)="profileSubTab = 'edit'" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" [style.color]="profileSubTab === 'edit' ? '#e0b0ff' : 'rgba(255,255,255,0.6)'" [style.background]="profileSubTab === 'edit' ? 'rgba(224,176,255,0.15)' : 'transparent'">
+            ✏️ Edit Profile
+          </button>
+          <button type="button" class="profile-subtab-btn" (click)="profileSubTab = 'privacy'" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" [style.color]="profileSubTab === 'privacy' ? '#e0b0ff' : 'rgba(255,255,255,0.6)'" [style.background]="profileSubTab === 'privacy' ? 'rgba(224,176,255,0.15)' : 'transparent'">
+            🔒 Privacy
+          </button>
+          <button type="button" class="profile-subtab-btn" (click)="profileSubTab = 'qr'" style="background: transparent; border: none; font-size: 0.82rem; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" [style.color]="profileSubTab === 'qr' ? '#e0b0ff' : 'rgba(255,255,255,0.6)'" [style.background]="profileSubTab === 'qr' ? 'rgba(224,176,255,0.15)' : 'transparent'">
+            📱 QR Code
+          </button>
+        </div>
 
-              <!-- Hidden File Input for Native Photo Upload -->
-              <input #profileFileInput type="file" accept="image/*" style="display:none;" (change)="onProfileFileSelected($event)" />
-
-              <h3 style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 4px;">{{ currentUser.name }}</h3>
-              <span style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.5); margin-bottom: 14px;">{{ currentUser.phone || '+1 555 0101' }}</span>
-
-              <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-                <button type="button" (click)="triggerProfileUpload()" style="background: rgba(224, 176, 255, 0.2); border: 1px solid rgba(224, 176, 255, 0.4); color: #e0b0ff; font-size: 0.8rem; font-weight: 700; padding: 6px 14px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                  <span class="material-icons-outlined" style="font-size: 1rem;">file_upload</span>
-                  <span>Upload Photo</span>
-                </button>
-
-                <button type="button" (click)="removeProfilePicture()" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-size: 0.8rem; font-weight: 700; padding: 6px 14px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                  <span class="material-icons-outlined" style="font-size: 1rem;">delete_outline</span>
-                  <span>Remove Photo</span>
-                </button>
-              </div>
-
-              <!-- Preset Avatars Row -->
-              <div style="margin-top: 16px; width: 100%; text-align: left;">
-                <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); font-weight: 600;">Or choose a preset avatar:</span>
-                <div style="display: flex; gap: 8px; overflow-x: auto; padding: 8px 0;">
-                  <img *ngFor="let url of avatarPresets" [src]="url" alt="Avatar Preset" (click)="selectPresetProfilePhoto(url)" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; cursor: pointer; border: 2px solid transparent; transition: transform 0.15s ease;" [style.border-color]="currentUser.avatar === url ? '#e0b0ff' : 'transparent'" />
-                </div>
-              </div>
+        <!-- SUB-TAB 1: OVERVIEW -->
+        <div *ngIf="profileSubTab === 'overview'" class="profile-overview-pane">
+          <!-- Large Avatar & Banner Card -->
+          <div style="display: flex; flex-direction: column; align-items: center; text-align: center; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px; padding: 22px; margin-bottom: 16px; position: relative; overflow: hidden;">
+            <div style="position: relative; width: 104px; height: 104px; margin-bottom: 12px; cursor: pointer;" (click)="openLightbox(currentUser.avatar)" title="Click to view full photo">
+              <img [src]="currentUser.avatar" [alt]="currentUser.name" style="width: 104px; height: 104px; border-radius: 50%; object-fit: cover; border: 3px solid #e0b0ff; box-shadow: 0 0 20px rgba(224, 176, 255, 0.4);" />
             </div>
 
-            <div class="account-details-grid">
-              <div class="detail-row">
-                <span class="detail-label">Name:</span>
-                <span class="detail-val">{{ currentUser.name }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Phone:</span>
-                <span class="detail-val">{{ currentUser.phone || '+1 555 0101' }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Status:</span>
-                <span class="detail-val">{{ currentUser.status }}</span>
+            <h3 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin-bottom: 2px;">{{ currentUser.name }}</h3>
+            <span style="font-size: 0.85rem; color: #e0b0ff; font-weight: 700; margin-bottom: 6px;">{{ getUserHandle() }}</span>
+            <p style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.7); max-width: 320px; margin-bottom: 16px; font-style: italic;">"{{ currentUser.status || 'Hey there! Using Messenger' }}"</p>
+
+            <!-- Quick Action Buttons -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+              <button type="button" (click)="profileSubTab = 'edit'" style="background: #e0b0ff; color: #051424; font-size: 0.8rem; font-weight: 700; padding: 7px 14px; border-radius: 10px; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <span class="material-icons-outlined" style="font-size: 1rem;">edit</span>
+                <span>Edit Profile</span>
+              </button>
+
+              <button type="button" (click)="removeProfilePicture()" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-size: 0.8rem; font-weight: 700; padding: 7px 14px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <span class="material-icons-outlined" style="font-size: 1rem;">delete_outline</span>
+                <span>Remove Photo</span>
+              </button>
+
+              <button type="button" (click)="openShareProfileModal()" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 0.8rem; font-weight: 600; padding: 7px 14px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <span class="material-icons-outlined" style="font-size: 1rem;">share</span>
+                <span>Share Profile</span>
+              </button>
+            </div>
+
+            <!-- Preset Avatars Row -->
+            <div style="margin-top: 16px; width: 100%; text-align: left;">
+              <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.5); font-weight: 600;">Or choose a preset avatar:</span>
+              <div style="display: flex; gap: 8px; overflow-x: auto; padding: 8px 0;">
+                <img *ngFor="let url of avatarPresets" [src]="url" alt="Avatar Preset" (click)="selectPresetProfilePhoto(url)" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; cursor: pointer; border: 2px solid transparent; transition: transform 0.15s ease;" [style.border-color]="currentUser.avatar === url ? '#e0b0ff' : 'transparent'" />
               </div>
             </div>
+          </div>
+
+          <!-- Information Grid Card -->
+          <div class="account-details-grid" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 14px 18px;">
+            <div class="detail-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <span class="detail-label" style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Phone Number:</span>
+              <span class="detail-val" style="font-size: 0.82rem; color: #fff; font-weight: 600;">{{ currentUser.phone || '+1 555 0101' }}</span>
+            </div>
+            <div class="detail-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <span class="detail-label" style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Account Status:</span>
+              <span class="detail-val" style="font-size: 0.82rem; color: #34d399; font-weight: 700;">🟢 Active & Connected</span>
+            </div>
+            <div class="detail-row" style="display: flex; justify-content: space-between; padding: 8px 0;">
+              <span class="detail-label" style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Security Level:</span>
+              <span class="detail-val" style="font-size: 0.82rem; color: #e0b0ff; font-weight: 600;">🔒 End-to-End Encrypted</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUB-TAB 2: EDIT PROFILE -->
+        <div *ngIf="profileSubTab === 'edit'" class="profile-edit-pane">
+          <!-- Error Alert with Retry -->
+          <div *ngIf="profileSaveError" style="display: flex; align-items: center; justify-content: space-between; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 12px; padding: 10px 14px; color: #fca5a5; font-size: 0.82rem; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="material-icons-outlined" style="color: #ef4444;">error_outline</span>
+              <span>{{ profileSaveError }}</span>
+            </div>
+            <button type="button" (click)="retrySaveProfile()" style="background: #ef4444; color: #fff; border: none; border-radius: 6px; padding: 4px 10px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Retry</button>
+          </div>
+
+          <!-- Success Alert -->
+          <div *ngIf="profileSaveSuccess" style="display: flex; align-items: center; gap: 8px; background: rgba(52, 211, 153, 0.2); border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 12px; padding: 10px 14px; color: #a7f3d0; font-size: 0.82rem; margin-bottom: 14px;">
+            <span class="material-icons-outlined" style="color: #34d399;">check_circle</span>
+            <span>{{ profileSaveSuccess }}</span>
+          </div>
+
+          <!-- Photo Removal Section -->
+          <div style="display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.04); border-radius: 14px; padding: 14px; margin-bottom: 14px;">
+            <img [src]="editProfileForm.avatar || currentUser.avatar" alt="Preview Avatar" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid #e0b0ff;" />
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #fff;">Profile Photo</span>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" (click)="removeProfilePicture()" style="background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 8px; cursor: pointer;">Remove Photo</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hidden Native Photo Input with Live Preview Trigger -->
+          <input #profileFileInput type="file" accept="image/*" style="display:none;" (change)="onPhotoSelectedWithPreview($event)" />
+
+          <!-- Full Name Input -->
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6); font-weight: 600; display: block; margin-bottom: 4px;">Display Name *</label>
+            <input type="text" class="form-input" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 8px 12px; color: #fff; font-size: 0.85rem; outline: none;" [(ngModel)]="editProfileForm.name" placeholder="e.g. Srinivas K" required />
+          </div>
+
+          <!-- Username Input -->
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6); font-weight: 600; display: block; margin-bottom: 4px;">Username *</label>
+            <input type="text" class="form-input" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 8px 12px; color: #e0b0ff; font-size: 0.85rem; outline: none; font-weight: 600;" [(ngModel)]="editProfileForm.username" placeholder="e.g. @srinivas_k" />
+          </div>
+
+          <!-- About / Bio Input -->
+          <div style="margin-bottom: 16px;">
+            <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6); font-weight: 600; display: block; margin-bottom: 4px;">About / Bio (Max 150 chars)</label>
+            <textarea rows="2" class="form-input" style="width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 8px 12px; color: #fff; font-size: 0.85rem; outline: none; resize: none;" [(ngModel)]="editProfileForm.about" maxLength="150" placeholder="Tell something about yourself..."></textarea>
+            <span style="font-size: 0.65rem; color: rgba(255,255,255,0.4); float: right;">{{ editProfileForm.about.length || 0 }}/150</span>
+          </div>
+
+          <button type="button" (click)="saveFullProfileForm()" [disabled]="isSavingProfile" style="width: 100%; background: #e0b0ff; color: #051424; font-weight: 700; padding: 10px; border-radius: 12px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+            <span *ngIf="isSavingProfile" class="animate-spin material-icons-outlined" style="font-size: 1rem;">sync</span>
+            <span>{{ isSavingProfile ? 'Saving Profile Changes...' : 'Save Profile Changes' }}</span>
+          </button>
+        </div>
+
+        <!-- SUB-TAB 3: PRIVACY CONTROL SETTINGS -->
+        <div *ngIf="profileSubTab === 'privacy'" class="profile-privacy-pane">
+          <h5 style="font-size: 0.85rem; font-weight: 700; color: #e0b0ff; margin-bottom: 12px;">🔒 Account Privacy Controls</h5>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 10px 14px;">
+              <div>
+                <strong style="font-size: 0.82rem; color: #fff; display: block;">Profile Photo Visibility</strong>
+                <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Who can see your profile photo</span>
+              </div>
+              <select [ngModel]="privacySettings.profilePhotoVisibility" (ngModelChange)="updatePrivacyControl('profilePhotoVisibility', $event)" style="background: #051424; color: #e0b0ff; border: 1px solid rgba(224,176,255,0.3); border-radius: 8px; padding: 4px 8px; font-size: 0.78rem; outline: none; cursor: pointer;">
+                <option value="Everyone">Everyone</option>
+                <option value="My Contacts">My Contacts</option>
+                <option value="Nobody">Nobody</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 10px 14px;">
+              <div>
+                <strong style="font-size: 0.82rem; color: #fff; display: block;">About / Bio Visibility</strong>
+                <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Who can view your status bio</span>
+              </div>
+              <select [ngModel]="privacySettings.aboutVisibility" (ngModelChange)="updatePrivacyControl('aboutVisibility', $event)" style="background: #051424; color: #e0b0ff; border: 1px solid rgba(224,176,255,0.3); border-radius: 8px; padding: 4px 8px; font-size: 0.78rem; outline: none; cursor: pointer;">
+                <option value="Everyone">Everyone</option>
+                <option value="My Contacts">My Contacts</option>
+                <option value="Nobody">Nobody</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 10px 14px;">
+              <div>
+                <strong style="font-size: 0.82rem; color: #fff; display: block;">Last Seen & Presence</strong>
+                <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Who can see when you were last online</span>
+              </div>
+              <select [ngModel]="privacySettings.lastSeenVisibility" (ngModelChange)="updatePrivacyControl('lastSeenVisibility', $event)" style="background: #051424; color: #e0b0ff; border: 1px solid rgba(224,176,255,0.3); border-radius: 8px; padding: 4px 8px; font-size: 0.78rem; outline: none; cursor: pointer;">
+                <option value="Everyone">Everyone</option>
+                <option value="My Contacts">My Contacts</option>
+                <option value="Nobody">Nobody</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 10px 14px;">
+              <div>
+                <strong style="font-size: 0.82rem; color: #fff; display: block;">Read Receipts (Seen Checkmarks)</strong>
+                <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Show double checkmarks when messages are read</span>
+              </div>
+              <button type="button" (click)="updatePrivacyControl('readReceipts', !privacySettings.readReceipts)" style="background: transparent; border: none; cursor: pointer;">
+                <span class="material-icons-outlined" [style.color]="privacySettings.readReceipts ? '#34d399' : 'rgba(255,255,255,0.3)'" style="font-size: 1.6rem;">{{ privacySettings.readReceipts ? 'toggle_on' : 'toggle_off' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUB-TAB 4: PROFILE QR CODE -->
+        <div *ngIf="profileSubTab === 'qr'" class="profile-qr-pane" style="text-align: center; padding: 12px 0;">
+          <h5 style="font-size: 0.9rem; font-weight: 700; color: #e0b0ff; margin-bottom: 6px;">📱 Your Profile QR Code</h5>
+          <p style="font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 14px;">Scan with another device to view & add this contact profile instantly.</p>
+
+          <div style="background: #fff; padding: 16px; border-radius: 16px; display: inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.5); margin-bottom: 14px;">
+            <img [src]="profileQrUrl" alt="User Profile QR" style="width: 180px; height: 180px;" />
+          </div>
+
+          <div style="display: flex; gap: 8px; justify-content: center;">
+            <button type="button" (click)="copyToClipboard(profileQrUrl, 'QR Link')" style="background: rgba(224,176,255,0.2); border: 1px solid rgba(224,176,255,0.4); color: #e0b0ff; font-size: 0.8rem; font-weight: 700; padding: 6px 14px; border-radius: 10px; cursor: pointer;">Copy Link</button>
+            <button type="button" (click)="openShareProfileModal()" style="background: #e0b0ff; color: #051424; font-size: 0.8rem; font-weight: 700; padding: 6px 14px; border-radius: 10px; border: none; cursor: pointer;">Share Profile</button>
           </div>
         </div>
       </div>
@@ -196,32 +347,242 @@
 
   <!-- Voice / Video Call Modal Overlay -->
   <div class="call-modal-overlay" *ngIf="activeCall">
-    <div class="call-card glass-card">
+
+    <!-- 1. Incoming Call Screen -->
+    <div class="call-card glass-card incoming-call-card" *ngIf="activeCall.direction === 'incoming' && (activeCall.status === 'ringing' || activeCall.status === 'calling')">
+      <div class="call-avatar-container incoming-avatar-container">
+        <img [src]="activeCall.contactAvatar" [alt]="activeCall.contactName" class="call-avatar" />
+        <div class="call-ring-waves incoming-waves">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <h2 class="call-name">{{ activeCall.contactName }}</h2>
+      <p class="call-status incoming-status-text">
+        <span class="material-icons-outlined incoming-type-icon">{{ activeCall.type === 'video' ? 'videocam' : 'call' }}</span>
+        <span>Incoming Sanctuary {{ activeCall.type === 'video' ? 'Video' : 'Voice' }} Call...</span>
+      </p>
+
+      <div class="call-controls incoming-controls">
+        <button type="button" class="btn-call-action btn-decline-call" (click)="declineIncomingCall()" title="Decline Call">
+          <span class="material-icons-outlined">call_end</span>
+          <span>Decline</span>
+        </button>
+        <button type="button" class="btn-call-action btn-accept-call" (click)="acceptIncomingCall()" title="Accept Call">
+          <span class="material-icons-outlined">{{ activeCall.type === 'video' ? 'videocam' : 'call' }}</span>
+          <span>Accept</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. Outgoing Voice Call Card UI -->
+    <div class="call-card glass-card" *ngIf="activeCall.type === 'audio' && !(activeCall.direction === 'incoming' && (activeCall.status === 'ringing' || activeCall.status === 'calling'))">
       <div class="call-avatar-container">
         <img [src]="activeCall.contactAvatar" [alt]="activeCall.contactName" class="call-avatar" />
-        <div class="call-ring-waves" *ngIf="activeCall.status === 'ringing'">
+        <div class="call-ring-waves" *ngIf="activeCall.status === 'ringing' || activeCall.status === 'calling'">
           <span></span><span></span><span></span>
         </div>
       </div>
 
       <h2 class="call-name">{{ activeCall.contactName }}</h2>
       <p class="call-status">
-        <span *ngIf="activeCall.status === 'ringing'">Ringing Sanctuary {{ activeCall.type === 'video' ? 'Video' : 'Voice' }} Call...</span>
+        <span *ngIf="activeCall.status === 'calling'">Calling...</span>
+        <span *ngIf="activeCall.status === 'ringing'">Ringing Sanctuary Voice Call...</span>
+        <span *ngIf="activeCall.status === 'connecting'">Connecting...</span>
         <span *ngIf="activeCall.status === 'connected'">Connected • {{ callTimeFormatted }}</span>
+        <span *ngIf="activeCall.status === 'reconnecting'" class="status-warning">Reconnecting...</span>
+        <span *ngIf="activeCall.status === 'declined'">Call Declined</span>
         <span *ngIf="activeCall.status === 'ended'">Call Ended</span>
+        <span *ngIf="activeCall.status === 'failed'" class="status-danger">Call Failed</span>
       </p>
 
       <div class="call-controls">
-        <button type="button" class="btn-call-control btn-mute">
-          <span class="material-icons-outlined">mic_off</span>
+        <button
+          type="button"
+          class="btn-call-control btn-mute"
+          [class.active-off]="isCallMuted"
+          (click)="toggleCallMute()"
+          [title]="isCallMuted ? 'Unmute Microphone' : 'Mute Microphone'"
+        >
+          <span class="material-icons-outlined">{{ isCallMuted ? 'mic_off' : 'mic' }}</span>
         </button>
-        <button type="button" class="btn-call-control btn-end" (click)="endCall()">
+        <button type="button" class="btn-call-control btn-end" (click)="endCall()" title="End Call">
           <span class="material-icons-outlined">call_end</span>
         </button>
-        <button type="button" class="btn-call-control btn-speaker">
-          <span class="material-icons-outlined">volume_up</span>
+        <button
+          type="button"
+          class="btn-call-control btn-speaker"
+          [class.active-off]="!isCallSpeakerOn"
+          (click)="toggleCallSpeaker()"
+          [title]="isCallSpeakerOn ? 'Speaker On' : 'Speaker Off'"
+        >
+          <span class="material-icons-outlined">{{ isCallSpeakerOn ? 'volume_up' : 'volume_off' }}</span>
         </button>
       </div>
+    </div>
+
+    <!-- 3. Advanced WebRTC Video Call Screen -->
+    <div class="video-call-card glass-card" *ngIf="activeCall.type === 'video' && !(activeCall.direction === 'incoming' && (activeCall.status === 'ringing' || activeCall.status === 'calling'))">
+      
+      <!-- Video Call Permission / Error Overlay -->
+      <div class="video-call-error-view" *ngIf="callPermissionError">
+        <div class="error-call-icon">
+          <span class="material-icons-outlined">videocam_off</span>
+        </div>
+        <h3>Camera & Mic Access Required</h3>
+        <p class="error-call-text">{{ callPermissionError }}</p>
+        <div class="error-call-actions">
+          <button type="button" class="btn-retry-call" (click)="retryCallMedia()">
+            <span class="material-icons-outlined">refresh</span>
+            <span>Try Again</span>
+          </button>
+          <button type="button" class="btn-end-error-call" (click)="endCall()">
+            <span>End Call</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Video Viewport -->
+      <div class="video-call-viewport" *ngIf="!callPermissionError" (click)="toggleCallControlsVisibility()">
+        
+        <!-- Main / Remote Video Feed -->
+        <video
+          #callRemoteVideo
+          autoplay
+          playsinline
+          class="remote-call-video"
+          [class.hidden]="activeCall.status === 'calling' || activeCall.status === 'ringing' || activeCall.status === 'connecting' || activeCall.isRemoteCameraOff"
+        ></video>
+
+        <!-- Remote Camera Off Fallback -->
+        <div class="remote-camera-off-view" *ngIf="activeCall.status === 'connected' && activeCall.isRemoteCameraOff">
+          <div class="call-avatar-container">
+            <img [src]="activeCall.contactAvatar" [alt]="activeCall.contactName" class="call-avatar" />
+          </div>
+          <div class="remote-off-badge">
+            <span class="material-icons-outlined">videocam_off</span>
+            <span>{{ activeCall.contactName }}'s camera is off</span>
+          </div>
+        </div>
+
+        <!-- Remote Placeholder when Calling / Ringing / Connecting -->
+        <div class="remote-video-placeholder" *ngIf="activeCall.status === 'calling' || activeCall.status === 'ringing' || activeCall.status === 'connecting'">
+          <div class="call-avatar-container">
+            <img [src]="activeCall.contactAvatar" [alt]="activeCall.contactName" class="call-avatar" />
+            <div class="call-ring-waves">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          <p class="video-connecting-text">
+            {{ activeCall.status === 'calling' ? 'Calling ' + activeCall.contactName + '...' : (activeCall.status === 'connecting' ? 'Establishing WebRTC Connection...' : 'Ringing ' + activeCall.contactName + '...') }}
+          </p>
+        </div>
+
+        <!-- Local Self Camera PiP (Positionable/Draggable Floating Preview) -->
+        <div
+          class="local-pip-container"
+          [ngClass]="'pip-' + pipPosition"
+          [class.pip-camera-off]="isCallCameraOff"
+          (click)="$event.stopPropagation(); cyclePipPosition()"
+          title="Click to reposition camera preview"
+        >
+          <video
+            #callLocalVideo
+            autoplay
+            playsinline
+            muted
+            class="local-pip-video"
+            [class.mirrored]="callFacingMode === 'user'"
+            [class.hidden]="isCallCameraOff"
+          ></video>
+          <div class="pip-camera-off-indicator" *ngIf="isCallCameraOff">
+            <span class="material-icons-outlined">videocam_off</span>
+            <span>Camera Off</span>
+          </div>
+          <span class="pip-label">You • Tap to move</span>
+        </div>
+
+        <!-- Video Call Header Meta & Status Badges -->
+        <div class="video-call-header-meta" [class.controls-hidden]="!showCallControls">
+          <div class="video-call-contact-info">
+            <div class="video-header-top">
+              <span class="video-contact-name">{{ activeCall.contactName }}</span>
+              <span class="webrtc-secure-badge" title="End-to-End WebRTC Secured">
+                <span class="material-icons-outlined">lock</span> HD
+              </span>
+            </div>
+            <span class="video-call-timer">
+              <span *ngIf="activeCall.status === 'calling'">Calling...</span>
+              <span *ngIf="activeCall.status === 'ringing'">Ringing...</span>
+              <span *ngIf="activeCall.status === 'connecting'">Connecting...</span>
+              <span *ngIf="activeCall.status === 'connected'">Connected • {{ callTimeFormatted }}</span>
+              <span *ngIf="activeCall.status === 'reconnecting'" class="text-amber">Reconnecting...</span>
+              <span *ngIf="activeCall.status === 'declined'">Call Declined</span>
+              <span *ngIf="activeCall.status === 'ended'">Call Ended</span>
+              <span *ngIf="activeCall.status === 'failed'" class="text-red">Call Failed</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Remote Muted Indicator -->
+        <div class="remote-muted-badge" *ngIf="activeCall.isRemoteMuted && activeCall.status === 'connected'">
+          <span class="material-icons-outlined">mic_off</span>
+          <span>{{ activeCall.contactName }} is muted</span>
+        </div>
+
+        <!-- Video Call Controls Bar (Auto-hiding on inactivity) -->
+        <div class="video-call-controls-bar" [class.controls-hidden]="!showCallControls" (click)="$event.stopPropagation(); resetAutoHideControlsTimer()">
+          <button
+            type="button"
+            class="btn-call-control btn-video-action"
+            [class.active-off]="isCallMuted"
+            (click)="toggleCallMute()"
+            [title]="isCallMuted ? 'Unmute Microphone' : 'Mute Microphone'"
+          >
+            <span class="material-icons-outlined">{{ isCallMuted ? 'mic_off' : 'mic' }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-call-control btn-video-action"
+            [class.active-off]="isCallCameraOff"
+            (click)="toggleCallCamera()"
+            [title]="isCallCameraOff ? 'Turn Camera On' : 'Turn Camera Off'"
+          >
+            <span class="material-icons-outlined">{{ isCallCameraOff ? 'videocam_off' : 'videocam' }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-call-control btn-video-action"
+            (click)="flipCallCamera()"
+            title="Switch Front/Rear Camera"
+          >
+            <span class="material-icons-outlined">flip_camera_ios</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-call-control btn-video-action"
+            [class.active-off]="!isCallSpeakerOn"
+            (click)="toggleCallSpeaker()"
+            [title]="isCallSpeakerOn ? 'Speaker On' : 'Speaker Off'"
+          >
+            <span class="material-icons-outlined">{{ isCallSpeakerOn ? 'volume_up' : 'volume_off' }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn-call-control btn-end"
+            (click)="endCall()"
+            title="End Video Call"
+          >
+            <span class="material-icons-outlined">call_end</span>
+          </button>
+        </div>
+
+      </div>
+
     </div>
   </div>
 
@@ -288,6 +649,48 @@
       <button type="button" (click)="closeLightbox()" style="position: absolute; top: -16px; right: -16px; width: 36px; height: 36px; border-radius: 50%; background: #e0b0ff; color: #051424; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
         <span class="material-icons-outlined">close</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Live Image Preview Before Saving Modal Overlay -->
+  <div class="modal-overlay" *ngIf="showPreviewAvatarModal" (click)="cancelStagedAvatar()">
+    <div class="modal-card glass-card" (click)="$event.stopPropagation()" style="max-width: 380px; text-align: center; padding: 24px;">
+      <h3 style="color: #e0b0ff; margin-bottom: 12px;">🖼️ Preview Profile Photo</h3>
+      <p style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-bottom: 16px;">Review how your profile photo will look to all contacts before saving.</p>
+
+      <div style="width: 140px; height: 140px; border-radius: 50%; overflow: hidden; margin: 0 auto 20px; border: 4px solid #e0b0ff; box-shadow: 0 0 24px rgba(224,176,255,0.4);">
+        <img [src]="stagedAvatarUrl" alt="Staged Avatar Preview" style="width: 100%; height: 100%; object-fit: cover;" />
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button type="button" class="btn-modal-cancel" (click)="cancelStagedAvatar()">Cancel</button>
+        <button type="button" (click)="confirmStagedAvatar()" style="background: #e0b0ff; color: #051424; font-weight: 700; padding: 8px 20px; border-radius: 10px; border: none; cursor: pointer;">Set Profile Photo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share Profile Contact Selector Modal Overlay -->
+  <div class="modal-overlay" *ngIf="showShareProfileContactModal" (click)="closeShareProfileModal()">
+    <div class="modal-card glass-card" (click)="$event.stopPropagation()" style="max-width: 420px; max-height: 80vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3>📤 Share Profile Card</h3>
+        <button type="button" class="btn-close-modal" (click)="closeShareProfileModal()">
+          <span class="material-icons-outlined">close</span>
+        </button>
+      </div>
+
+      <p style="font-size: 0.78rem; color: rgba(255,255,255,0.6); padding: 0 16px 10px;">Select a contact below to send your profile card into chat:</p>
+
+      <div style="flex: 1; overflow-y: auto; padding: 0 16px 16px; display: flex; flex-direction: column; gap: 8px;">
+        <div *ngFor="let c of contacts" class="share-contact-item" (click)="shareProfileToContact(c)" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; cursor: pointer; transition: all 0.2s;">
+          <img [src]="c.avatar" [alt]="c.name" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />
+          <div style="display: flex; flex-direction: column;">
+            <strong style="font-size: 0.85rem; color: #fff;">{{ c.name }}</strong>
+            <span style="font-size: 0.72rem; color: rgba(255,255,255,0.5);">{{ c.phone || 'Contact' }}</span>
+          </div>
+          <span class="material-icons-outlined" style="margin-left: auto; color: #e0b0ff; font-size: 1.2rem;">send</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>

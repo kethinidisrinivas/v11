@@ -10,7 +10,7 @@ import { MessengerComponent } from './messenger/messenger.component';
 import { SidebarComponent } from './messenger/sidebar/sidebar.component';
 import { ChatWindowComponent } from './messenger/chat-window/chat-window.component';
 import { ContactInfoComponent } from './messenger/contact-info/contact-info.component';
-import { ProfileComponent } from './profile/profile.component';
+import { CameraModalComponent } from './messenger/camera-modal/camera-modal.component';
 
 @NgModule({
   declarations: [
@@ -21,7 +21,7 @@ import { ProfileComponent } from './profile/profile.component';
     SidebarComponent,
     ChatWindowComponent,
     ContactInfoComponent,
-    ProfileComponent
+    CameraModalComponent
   ],
   imports: [
     BrowserModule,

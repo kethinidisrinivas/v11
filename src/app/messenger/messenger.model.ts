@@ -1,6 +1,16 @@
+export interface PrivacySettings {
+  profilePhotoVisibility: 'Everyone' | 'My Contacts' | 'Nobody';
+  aboutVisibility: 'Everyone' | 'My Contacts' | 'Nobody';
+  lastSeenVisibility: 'Everyone' | 'My Contacts' | 'Nobody';
+  onlineVisibility: 'Everyone' | 'Same as Last Seen';
+  readReceipts: boolean;
+  whoCanContactMe: 'Everyone' | 'My Contacts Only';
+}
+
 export interface User {
   id: string;
   name: string;
+  username?: string;
   avatar: string;
   status: string;
   phone?: string;
@@ -8,11 +18,13 @@ export interface User {
   isOnline: boolean;
   songs?: UserSong[];
   linkedDevices?: LinkedDevice[];
+  privacySettings?: PrivacySettings;
 }
 
 export interface Contact {
   id: string;
   name: string;
+  username?: string;
   avatar: string;
   statusText: string;
   isOnline: boolean;
@@ -23,6 +35,7 @@ export interface Contact {
   about?: string;
   createdAt?: string;
   userId?: string;
+  privacySettings?: PrivacySettings;
 }
 
 export interface Attachment {
@@ -54,6 +67,7 @@ export interface Message {
   id: string;
   senderId: string;
   senderName: string;
+  receiverId?: string;
   text: string;
   timestamp: Date;
   timeStr: string;
@@ -101,7 +115,7 @@ export interface CallLog {
   contactId: string;
   contactName: string;
   contactAvatar: string;
-  type: 'incoming' | 'outgoing' | 'missed';
+  type: 'incoming' | 'outgoing' | 'missed' | 'declined';
   mode: 'audio' | 'video';
   timestamp: Date;
   timeStr: string;
@@ -135,8 +149,12 @@ export interface SharedMedia {
 
 export interface CallState {
   type: 'audio' | 'video';
-  status: 'ringing' | 'connected' | 'ended';
+  status: 'calling' | 'ringing' | 'connecting' | 'connected' | 'reconnecting' | 'ended' | 'failed' | 'declined';
+  contactId?: string;
   contactName: string;
   contactAvatar: string;
   duration: number;
+  direction?: 'incoming' | 'outgoing';
+  isRemoteCameraOff?: boolean;
+  isRemoteMuted?: boolean;
 }

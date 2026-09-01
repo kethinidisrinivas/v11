@@ -1,0 +1,186 @@
+<div class="camera-modal-backdrop" (click)="cancel()">
+  <div class="camera-modal-card" (click)="$event.stopPropagation()">
+
+    <!-- Header / Top Bar -->
+    <div class="camera-header">
+      <button type="button" class="btn-icon-close" (click)="cancel()" title="Close Camera">
+        <span class="material-icons-outlined">close</span>
+      </button>
+
+      <div class="camera-title-badge">
+        <span class="mode-icon material-icons-outlined">
+          {{ cameraMode === 'photo' ? 'photo_camera' : 'videocam' }}
+        </span>
+        <span class="mode-label">
+          {{ isRecording ? 'Recording...' : (cameraMode === 'photo' ? 'Photo Mode' : 'Video Mode') }}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        class="btn-icon-switch"
+        (click)="switchCamera()"
+        [disabled]="isRecording || !mediaStream || capturedPhotoUrl !== null || capturedVideoUrl !== null"
+        title="Switch Camera (Front/Rear)"
+      >
+        <span class="material-icons-outlined">flip_camera_ios</span>
+      </button>
+    </div>
+
+    <!-- Viewport Area -->
+    <div class="camera-viewport">
+
+      <!-- Loading State -->
+      <div class="camera-state-container" *ngIf="isLoadingCamera && !permissionError && !capturedPhotoUrl && !capturedVideoUrl">
+        <div class="camera-spinner"></div>
+        <p class="state-text">Opening device camera...</p>
+      </div>
+
+      <!-- Permission / Error State -->
+      <div class="camera-state-container camera-error-state" *ngIf="permissionError && !capturedPhotoUrl && !capturedVideoUrl">
+        <div class="error-icon-wrapper">
+          <span class="material-icons-outlined">videocam_off</span>
+        </div>
+        <h4 class="error-heading">Camera Access Error</h4>
+        <p class="error-desc">{{ permissionError }}</p>
+
+        <div class="error-actions">
+          <button type="button" class="btn-retry" (click)="retryPermission()">
+            <span class="material-icons-outlined">refresh</span>
+            <span>Try Again</span>
+          </button>
+          <button type="button" class="btn-cancel-error" (click)="cancel()">
+            <span>Close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Stream View -->
+      <div
+        class="live-stream-wrapper"
+        [class.hidden]="isLoadingCamera || permissionError || capturedPhotoUrl || capturedVideoUrl"
+      >
+        <video
+          #videoElement
+          autoplay
+          playsinline
+          muted
+          class="camera-live-video"
+          [class.mirrored]="currentFacingMode === 'user'"
+        ></video>
+
+        <!-- Live Recording Timer Overlay -->
+        <div class="recording-indicator-badge" *ngIf="isRecording">
+          <span class="rec-dot"></span>
+          <span class="rec-time">{{ formatTimer(recordingSeconds) }}</span>
+        </div>
+      </div>
+
+      <!-- Captured Photo Preview -->
+      <div class="captured-preview-wrapper" *ngIf="capturedPhotoUrl">
+        <img [src]="capturedPhotoUrl" alt="Captured Photo Preview" class="preview-media-image" />
+        <div class="preview-badge">
+          <span class="material-icons-outlined">check_circle</span> Photo Captured
+        </div>
+      </div>
+
+      <!-- Captured Video Preview -->
+      <div class="captured-preview-wrapper" *ngIf="capturedVideoUrl">
+        <video
+          [src]="capturedVideoUrl"
+          controls
+          autoplay
+          playsinline
+          class="preview-media-video"
+          #previewVideoElement
+        ></video>
+        <div class="preview-badge">
+          <span class="material-icons-outlined">check_circle</span> Video Recorded ({{ recordedVideoDurationStr }})
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom Controls Area -->
+    <div class="camera-footer">
+
+      <!-- Live Capture Controls (when no preview) -->
+      <div class="live-controls" *ngIf="!capturedPhotoUrl && !capturedVideoUrl">
+        
+        <!-- Mode Switcher Tabs (Photo / Video) -->
+        <div class="mode-switcher-pills" *ngIf="!isRecording">
+          <button
+            type="button"
+            class="mode-pill"
+            [class.active]="cameraMode === 'photo'"
+            (click)="switchMode('photo')"
+          >
+            Photo
+          </button>
+          <button
+            type="button"
+            class="mode-pill"
+            [class.active]="cameraMode === 'video'"
+            (click)="switchMode('video')"
+          >
+            Video
+          </button>
+        </div>
+
+        <!-- Shutter / Record Trigger -->
+        <div class="shutter-row">
+          
+          <!-- Photo Mode Shutter -->
+          <button
+            type="button"
+            class="shutter-btn photo-shutter"
+            *ngIf="cameraMode === 'photo'"
+            (click)="capturePhoto()"
+            [disabled]="isLoadingCamera || !!permissionError"
+            title="Take Photo"
+          >
+            <div class="shutter-inner"></div>
+          </button>
+
+          <!-- Video Mode Shutter -->
+          <div class="video-shutter-container" *ngIf="cameraMode === 'video'">
+            <button
+              type="button"
+              class="shutter-btn video-shutter"
+              [class.is-recording]="isRecording"
+              (click)="isRecording ? stopVideoRecording() : startVideoRecording()"
+              [disabled]="isLoadingCamera || !!permissionError"
+              [title]="isRecording ? 'Stop Recording' : 'Start Recording'"
+            >
+              <div class="shutter-inner-video" [class.recording]="isRecording"></div>
+            </button>
+            <span class="video-shutter-hint" *ngIf="!isRecording">Tap to Record</span>
+            <span class="video-shutter-hint recording" *ngIf="isRecording">Tap to Stop</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Preview Action Controls (Retake, Cancel, Send) -->
+      <div class="preview-controls" *ngIf="capturedPhotoUrl || capturedVideoUrl">
+        <button type="button" class="btn-preview-action btn-retake" (click)="retake()" title="Retake Photo/Video">
+          <span class="material-icons-outlined">replay</span>
+          <span>Retake</span>
+        </button>
+
+        <button type="button" class="btn-preview-action btn-cancel" (click)="cancel()" title="Cancel">
+          <span class="material-icons-outlined">close</span>
+          <span>Cancel</span>
+        </button>
+
+        <button type="button" class="btn-preview-action btn-send-media" (click)="send()" title="Send Media">
+          <span class="material-icons-outlined">send</span>
+          <span>Send</span>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+</div>

@@ -2,8 +2,9 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, NgZ
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { MessengerService } from './messenger.service';
-import { AuthService } from '../services/auth.service';
-import { Contact, Message, SharedMedia, User, CallState, LinkedDevice } from './messenger.model';
+import { AuthService, PrivacySettings, DEFAULT_PRIVACY_SETTINGS } from '../services/auth.service';
+import { Contact, Message, SharedMedia, User, CallState, LinkedDevice, CallLog } from './messenger.model';
+import { WebRtcService, SignalingMessage } from './services/webrtc.service';
 
 @Component({
   selector: 'app-messenger',
@@ -13,6 +14,8 @@ import { Contact, Message, SharedMedia, User, CallState, LinkedDevice } from './
 export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('shaderCanvas', { static: false }) shaderCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('profileFileInput') profileFileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('callLocalVideo') callLocalVideoRef?: ElementRef<HTMLVideoElement>;
+  @ViewChild('callRemoteVideo') callRemoteVideoRef?: ElementRef<HTMLVideoElement>;
 
   lightboxImageUrl: string | null = null;
 
@@ -46,6 +49,24 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   qrCodeUrl = '';
   scannerSimulating = false;
 
+  // Advanced Profile Experience State
+  profileSubTab: 'overview' | 'edit' | 'privacy' | 'qr' | 'blocked' = 'overview';
+  editProfileForm = {
+    name: '',
+    username: '',
+    about: '',
+    avatar: ''
+  };
+  privacySettings: PrivacySettings = DEFAULT_PRIVACY_SETTINGS;
+  isSavingProfile = false;
+  profileSaveError = '';
+  profileSaveSuccess = '';
+  showPreviewAvatarModal = false;
+  stagedAvatarUrl = '';
+  showShareProfileContactModal = false;
+  blockedContactsList: Contact[] = [];
+  profileQrUrl = '';
+
   // Toast message
   toastMsg = '';
   private toastTimeout: any;
@@ -55,9 +76,22 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   newContactPhone = '';
   newContactAbout = '';
 
-  // Active Call State Modal
+  // Active Call State Modal & Real WebRTC Media Streams
   activeCall: CallState | null = null;
   callTimeFormatted = '00:00';
+  localCallStream: MediaStream | null = null;
+  remoteCallStream: MediaStream | null = null;
+  isCallMuted = false;
+  isCallCameraOff = false;
+  isCallSpeakerOn = true;
+  callFacingMode: 'user' | 'environment' = 'user';
+  callPermissionError: string | null = null;
+  isCallPermissionDenied = false;
+  isCallMediaLoading = false;
+  pipPosition: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' = 'top-right';
+  incomingOfferData: SignalingMessage | null = null;
+  showCallControls = true;
+  private autoHideControlsTimer: any;
   private callInterval: any;
   private callRingTimeout: any;
 
@@ -67,6 +101,7 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private messengerService: MessengerService,
     private authService: AuthService,
+    private webRtcService: WebRtcService,
     private router: Router,
     private ngZone: NgZone
   ) {}
@@ -105,6 +140,38 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       })
     );
+
+    // Initialize WebRTC signaling user identity
+    this.webRtcService.setCurrentUser(this.currentUser.id || 'me');
+
+    // Subscribe to WebRTC Incoming Calls
+    this.subscriptions.add(
+      this.webRtcService.incomingCall$.subscribe(signal => {
+        this.handleIncomingCallSignal(signal);
+      })
+    );
+
+    // Subscribe to WebRTC Remote Stream
+    this.subscriptions.add(
+      this.webRtcService.remoteStream$.subscribe(stream => {
+        this.remoteCallStream = stream;
+        this.attachCallStreams();
+      })
+    );
+
+    // Subscribe to WebRTC Connection State
+    this.subscriptions.add(
+      this.webRtcService.connectionState$.subscribe(state => {
+        this.handleWebRtcConnectionState(state);
+      })
+    );
+
+    // Subscribe to WebRTC Remote Peer Actions
+    this.subscriptions.add(
+      this.webRtcService.remoteAction$.subscribe(data => {
+        this.handleRemoteCallAction(data.action, data.payload);
+      })
+    );
   }
 
   ngAfterViewInit(): void {
@@ -116,6 +183,9 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
+    this.webRtcService.stopRingtone();
+    this.webRtcService.closePeerConnection();
+    this.stopCallMediaStream();
     this.clearCallTimers();
   }
 
@@ -130,9 +200,15 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
     this.linkedDevices = this.authService.getLinkedDevices();
   }
 
+  showProfileModal = false;
+
   // --- Settings & Linked Devices ---
-  openSettings(section: 'linked' | 'scanner' | 'profile' | 'logout' = 'linked'): void {
-    this.settingsActiveSection = section;
+  openSettings(section: string = 'linked'): void {
+    if (section === 'profile') {
+      this.openProfileModal();
+      return;
+    }
+    this.settingsActiveSection = (section === 'scanner' ? 'scanner' : 'linked');
     this.showSettingsModal = true;
     this.showAddDeviceQr = false;
     this.refreshSettingsData();
@@ -141,6 +217,15 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   closeSettings(): void {
     this.showSettingsModal = false;
     this.showAddDeviceQr = false;
+  }
+
+  openProfileModal(): void {
+    this.showProfileModal = true;
+    this.initProfileExperience();
+  }
+
+  closeProfileModal(): void {
+    this.showProfileModal = false;
   }
 
   logoutDevice(deviceId: string): void {
@@ -313,41 +398,556 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
     this.showToast('Profile picture updated! 📸');
   }
 
-  // --- Simulated Voice & Video Calls ---
+  getUserHandle(): string {
+    if (!this.currentUser) return '@user';
+    if (this.currentUser.username) return this.currentUser.username;
+    return '@' + (this.currentUser.name || 'user').toLowerCase().split(' ').join('_');
+  }
+
+  // --- Advanced Messenger Profile Experience Methods ---
+  initProfileExperience(): void {
+    if (!this.currentUser) return;
+    const sess = this.authService.getCurrentUser();
+    const defaultUsername = `@${this.currentUser.name.toLowerCase().replace(/\s+/g, '_')}`;
+
+    this.editProfileForm = {
+      name: this.currentUser.name || '',
+      username: (sess && sess.username) ? sess.username : defaultUsername,
+      about: (sess && sess.statusText) ? sess.statusText : (this.currentUser.status || 'Hey there! Using Messenger'),
+      avatar: this.currentUser.avatar || ''
+    };
+
+    this.privacySettings = this.authService.getPrivacySettings();
+    this.profileQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=Messenger_UserProfile_${encodeURIComponent(this.currentUser.phone || this.currentUser.id)}`;
+    this.profileSaveError = '';
+    this.profileSaveSuccess = '';
+    this.profileSubTab = 'overview';
+  }
+
+  saveFullProfileForm(): void {
+    this.profileSaveError = '';
+    this.profileSaveSuccess = '';
+
+    const nameTrim = (this.editProfileForm.name || '').trim();
+    if (!nameTrim) {
+      this.profileSaveError = 'Display Name cannot be empty.';
+      return;
+    }
+
+    let userTrim = (this.editProfileForm.username || '').trim();
+    if (userTrim && !userTrim.startsWith('@')) {
+      userTrim = `@${userTrim}`;
+      this.editProfileForm.username = userTrim;
+    }
+
+    if (userTrim && !/^@[a-zA-Z0-9_]{3,20}$/.test(userTrim)) {
+      this.profileSaveError = 'Username must start with @ and contain 3-20 letters, numbers, or underscores.';
+      return;
+    }
+
+    this.isSavingProfile = true;
+
+    setTimeout(() => {
+      const res = this.authService.updateFullProfile({
+        name: nameTrim,
+        username: userTrim,
+        statusText: this.editProfileForm.about.trim(),
+        avatar: this.editProfileForm.avatar
+      });
+
+      this.isSavingProfile = false;
+
+      if (!res.success) {
+        this.profileSaveError = res.error || 'Failed to save profile. Please check fields and try again.';
+        return;
+      }
+
+      const updatedSess = this.authService.getCurrentUser();
+      if (updatedSess) {
+        this.currentUser = {
+          ...this.currentUser,
+          name: updatedSess.name,
+          username: updatedSess.username,
+          avatar: updatedSess.avatar,
+          status: updatedSess.statusText
+        };
+      }
+
+      this.messengerService.syncContactAvatars();
+      this.profileSaveSuccess = 'Profile changes saved successfully! 💖';
+      this.showToast('Profile updated successfully! ✨');
+    }, 500);
+  }
+
+  retrySaveProfile(): void {
+    this.saveFullProfileForm();
+  }
+
+  onPhotoSelectedWithPreview(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    if (!file.type.startsWith('image/')) {
+      this.showToast('Please select a valid image file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.stagedAvatarUrl = reader.result as string;
+      this.showPreviewAvatarModal = true;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+  }
+
+  confirmStagedAvatar(): void {
+    if (!this.stagedAvatarUrl) return;
+    this.editProfileForm.avatar = this.stagedAvatarUrl;
+    this.authService.updateProfilePicture(this.stagedAvatarUrl);
+    this.currentUser = { ...this.currentUser, avatar: this.stagedAvatarUrl };
+    this.messengerService.syncContactAvatars();
+    this.showPreviewAvatarModal = false;
+    this.stagedAvatarUrl = '';
+    this.showToast('Profile photo updated! 📸');
+  }
+
+  cancelStagedAvatar(): void {
+    this.showPreviewAvatarModal = false;
+    this.stagedAvatarUrl = '';
+  }
+
+  updatePrivacyControl(key: keyof PrivacySettings, val: any): void {
+    const updated = this.authService.updatePrivacySettings({ [key]: val });
+    this.privacySettings = updated;
+    this.showToast(`Privacy setting updated! 🔒`);
+  }
+
+  copyToClipboard(text?: string, label: string = 'Text'): void {
+    if (!text) return;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    this.showToast(`Copied ${label} to clipboard! 📋`);
+  }
+
+  openShareProfileModal(): void {
+    this.showShareProfileContactModal = true;
+  }
+
+  closeShareProfileModal(): void {
+    this.showShareProfileContactModal = false;
+  }
+
+  shareProfileToContact(targetContact: Contact): void {
+    if (!targetContact || !this.currentUser) return;
+    const sess = this.authService.getCurrentUser();
+    const handle = (sess && sess.username) ? sess.username : `@${this.currentUser.name.toLowerCase().replace(/\s+/g, '_')}`;
+
+    const profileMsgText = `🪪 Messenger Profile Card\n👤 Name: ${this.currentUser.name}\n🏷️ Username: ${handle}\n📱 Phone: ${this.currentUser.phone || 'N/A'}\n💬 Bio: "${this.currentUser.status || 'Hey there! Using Messenger'}"`;
+
+    this.messengerService.sendMessage(targetContact.id, profileMsgText);
+    this.closeShareProfileModal();
+    this.messengerService.selectContact(targetContact);
+    this.showToast(`Shared your profile card with ${targetContact.name}! 🚀`);
+  }
+
+  unblockContact(contactId: string): void {
+    this.blockedContactsList = this.blockedContactsList.filter(c => c.id !== contactId);
+    this.showToast('Contact unblocked');
+  }
+
+  // --- Advanced WebRTC Voice & Video Calling System ---
   startCall(type: 'audio' | 'video'): void {
     if (!this.selectedContact) return;
     this.clearCallTimers();
+    this.stopCallMediaStream();
+    this.webRtcService.closePeerConnection();
+
+    this.isCallMuted = false;
+    this.isCallCameraOff = false;
+    this.isCallPermissionDenied = false;
+    this.callPermissionError = null;
 
     this.activeCall = {
       type: type,
-      status: 'ringing',
+      status: 'calling',
+      contactId: this.selectedContact.id,
       contactName: this.selectedContact.name,
       contactAvatar: this.selectedContact.avatar,
-      duration: 0
+      duration: 0,
+      direction: 'outgoing'
     };
 
-    this.callRingTimeout = setTimeout(() => {
-      if (this.activeCall) {
-        this.activeCall.status = 'connected';
+    // Start outgoing ringback sound
+    this.webRtcService.startOutgoingRingtone();
+
+    // Request real hardware camera and mic on call start
+    this.initCallMediaStream(type === 'video', true).then(() => {
+      if (this.localCallStream && this.selectedContact) {
+        this.webRtcService.createPeerConnection(this.localCallStream, true, this.selectedContact.id, type);
+        if (this.activeCall) {
+          this.activeCall.status = 'ringing';
+        }
+
+        // Automatic connection for local simulated demo testing
+        this.callRingTimeout = setTimeout(() => {
+          if (this.activeCall && (this.activeCall.status === 'calling' || this.activeCall.status === 'ringing')) {
+            this.activeCall.status = 'connected';
+            this.webRtcService.stopRingtone();
+            this.startCallTimer();
+            this.attachCallStreams();
+          }
+        }, 3000);
+      }
+    });
+  }
+
+  handleIncomingCallSignal(signal: SignalingMessage): void {
+    this.clearCallTimers();
+    this.stopCallMediaStream();
+    this.incomingOfferData = signal;
+
+    this.activeCall = {
+      type: signal.callType || 'video',
+      status: 'ringing',
+      contactId: signal.senderId,
+      contactName: signal.senderName || 'Incoming Contact',
+      contactAvatar: signal.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+      duration: 0,
+      direction: 'incoming'
+    };
+
+    // Play incoming musical ringtone
+    this.webRtcService.startIncomingRingtone();
+  }
+
+  async acceptIncomingCall(): Promise<void> {
+    if (!this.activeCall || !this.incomingOfferData) return;
+    this.webRtcService.stopRingtone();
+    this.activeCall.status = 'connecting';
+
+    await this.initCallMediaStream(this.activeCall.type === 'video', true);
+
+    if (this.localCallStream && this.incomingOfferData) {
+      await this.webRtcService.answerCall(this.incomingOfferData, this.localCallStream);
+      this.activeCall.status = 'connected';
+      this.startCallTimer();
+      this.attachCallStreams();
+    }
+  }
+
+  declineIncomingCall(): void {
+    if (!this.activeCall) return;
+    this.webRtcService.stopRingtone();
+
+    if (this.incomingOfferData) {
+      this.webRtcService.sendCallAction(this.incomingOfferData.senderId, 'decline');
+    }
+
+    // Save declined call log
+    this.messengerService.addCallLog({
+      id: 'call_' + Date.now(),
+      contactId: this.activeCall.contactId || 'unknown',
+      contactName: this.activeCall.contactName,
+      contactAvatar: this.activeCall.contactAvatar,
+      type: 'declined',
+      mode: this.activeCall.type,
+      timestamp: new Date(),
+      timeStr: 'Just now',
+      duration: 0,
+      formattedDuration: '00:00'
+    });
+
+    this.activeCall.status = 'declined';
+    setTimeout(() => {
+      this.activeCall = null;
+      this.stopCallMediaStream();
+      this.incomingOfferData = null;
+    }, 1200);
+  }
+
+  handleWebRtcConnectionState(state: string): void {
+    if (!this.activeCall) return;
+    if (state === 'connected') {
+      this.activeCall.status = 'connected';
+      this.webRtcService.stopRingtone();
+      if (!this.callInterval) {
         this.startCallTimer();
       }
-    }, 2500);
+    } else if (state === 'reconnecting') {
+      if (this.activeCall.status === 'connected') {
+        this.activeCall.status = 'reconnecting';
+      }
+    } else if (state === 'failed') {
+      this.activeCall.status = 'failed';
+    }
+  }
+
+  handleRemoteCallAction(action: string, payload?: any): void {
+    if (!this.activeCall) return;
+
+    if (action === 'decline') {
+      this.webRtcService.stopRingtone();
+      this.activeCall.status = 'declined';
+      this.showToast('Call declined');
+      setTimeout(() => {
+        this.endCall();
+      }, 1500);
+    } else if (action === 'end') {
+      this.activeCall.status = 'ended';
+      this.showToast('Call ended by ' + this.activeCall.contactName);
+      setTimeout(() => {
+        this.endCall();
+      }, 1200);
+    } else if (action === 'camera_toggle') {
+      this.activeCall.isRemoteCameraOff = !!payload?.off;
+    } else if (action === 'mic_toggle') {
+      this.activeCall.isRemoteMuted = !!payload?.muted;
+    }
+  }
+
+  async initCallMediaStream(video: boolean, audio: boolean): Promise<void> {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      this.callPermissionError = 'Camera/Microphone access is not supported on this browser or environment.';
+      this.isCallPermissionDenied = true;
+      return;
+    }
+
+    this.isCallMediaLoading = true;
+    this.callPermissionError = null;
+    this.isCallPermissionDenied = false;
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        video: video ? {
+          facingMode: this.callFacingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } : false,
+        audio: audio
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.localCallStream = stream;
+      this.isCallMediaLoading = false;
+      this.attachCallStreams();
+    } catch (err: any) {
+      this.isCallMediaLoading = false;
+      console.error('Call media access error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        this.isCallPermissionDenied = true;
+        this.callPermissionError = 'Camera and microphone permissions were denied. Please allow access in your browser settings to continue the video call.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        this.callPermissionError = 'No camera or microphone device found on this system.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        this.callPermissionError = 'Camera or microphone is in use by another app. Please close other applications and retry.';
+      } else {
+        this.callPermissionError = `Unable to access media: ${err.message || 'Unknown error'}.`;
+      }
+    }
+  }
+
+  attachCallStreams(): void {
+    setTimeout(() => {
+      if (this.callLocalVideoRef && this.callLocalVideoRef.nativeElement && this.localCallStream) {
+        this.callLocalVideoRef.nativeElement.srcObject = this.localCallStream;
+        this.callLocalVideoRef.nativeElement.play().catch(() => {});
+      }
+      if (this.callRemoteVideoRef && this.callRemoteVideoRef.nativeElement) {
+        const streamToUse = this.remoteCallStream || this.localCallStream;
+        if (streamToUse) {
+          this.callRemoteVideoRef.nativeElement.srcObject = streamToUse;
+          this.callRemoteVideoRef.nativeElement.play().catch(() => {});
+        }
+      }
+    }, 100);
+  }
+
+  toggleCallMute(): void {
+    this.isCallMuted = !this.isCallMuted;
+    if (this.localCallStream) {
+      this.localCallStream.getAudioTracks().forEach((track: MediaStreamTrack) => {
+        track.enabled = !this.isCallMuted;
+      });
+    }
+    if (this.activeCall && this.activeCall.contactId) {
+      this.webRtcService.sendCallAction(this.activeCall.contactId, 'mic_toggle', { muted: this.isCallMuted });
+    }
+  }
+
+  toggleCallCamera(): void {
+    this.isCallCameraOff = !this.isCallCameraOff;
+    if (this.localCallStream) {
+      this.localCallStream.getVideoTracks().forEach((track: MediaStreamTrack) => {
+        track.enabled = !this.isCallCameraOff;
+      });
+    }
+    if (this.activeCall && this.activeCall.contactId) {
+      this.webRtcService.sendCallAction(this.activeCall.contactId, 'camera_toggle', { off: this.isCallCameraOff });
+    }
+  }
+
+  async flipCallCamera(): Promise<void> {
+    this.callFacingMode = this.callFacingMode === 'user' ? 'environment' : 'user';
+    if (this.localCallStream) {
+      const oldVideoTrack = this.localCallStream.getVideoTracks()[0];
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: this.callFacingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        if (newVideoTrack) {
+          if (oldVideoTrack) {
+            this.localCallStream.removeTrack(oldVideoTrack);
+            oldVideoTrack.stop();
+          }
+          this.localCallStream.addTrack(newVideoTrack);
+          newVideoTrack.enabled = !this.isCallCameraOff;
+          await this.webRtcService.replaceVideoTrack(newVideoTrack);
+          this.attachCallStreams();
+        }
+      } catch (err) {
+        console.error('Failed to switch camera during call:', err);
+      }
+    }
+  }
+
+  toggleCallSpeaker(): void {
+    this.isCallSpeakerOn = !this.isCallSpeakerOn;
+  }
+
+  cyclePipPosition(): void {
+    const positions: Array<'top-right' | 'top-left' | 'bottom-left' | 'bottom-right'> = [
+      'top-right', 'top-left', 'bottom-left', 'bottom-right'
+    ];
+    const currentIndex = positions.indexOf(this.pipPosition);
+    this.pipPosition = positions[(currentIndex + 1) % positions.length];
+  }
+
+  setPipPosition(pos: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left'): void {
+    this.pipPosition = pos;
+  }
+
+  simulateIncomingCall(type: 'audio' | 'video' = 'video'): void {
+    const contact = this.selectedContact || this.contacts[0];
+    this.handleIncomingCallSignal({
+      type: 'offer',
+      callId: 'sim_call_' + Date.now(),
+      senderId: contact.id,
+      senderName: contact.name,
+      senderAvatar: contact.avatar,
+      receiverId: this.currentUser.id || 'me',
+      callType: type
+    });
+  }
+
+  retryCallMedia(): void {
+    if (this.activeCall) {
+      this.initCallMediaStream(this.activeCall.type === 'video', true);
+    }
   }
 
   endCall(): void {
     if (this.activeCall) {
+      const durationSecs = this.activeCall.duration || 0;
+      const mins = Math.floor(durationSecs / 60);
+      const secs = durationSecs % 60;
+      const formatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+      // Save to Call History
+      const logType = this.activeCall.status === 'declined'
+        ? 'declined'
+        : (this.activeCall.status === 'calling' || durationSecs === 0)
+        ? (this.activeCall.direction === 'incoming' ? 'missed' : 'outgoing')
+        : (this.activeCall.direction === 'incoming' ? 'incoming' : 'outgoing');
+
+      this.messengerService.addCallLog({
+        id: 'call_' + Date.now(),
+        contactId: this.activeCall.contactId || this.selectedContact?.id || 'unknown',
+        contactName: this.activeCall.contactName,
+        contactAvatar: this.activeCall.contactAvatar,
+        type: logType,
+        mode: this.activeCall.type,
+        timestamp: new Date(),
+        timeStr: 'Just now',
+        duration: durationSecs,
+        formattedDuration: formatted
+      });
+
+      if (this.activeCall.contactId) {
+        this.webRtcService.sendCallAction(this.activeCall.contactId, 'end');
+      }
+
       this.activeCall.status = 'ended';
+      this.webRtcService.stopRingtone();
+      this.webRtcService.closePeerConnection();
+      this.stopCallMediaStream();
+
       setTimeout(() => {
         this.activeCall = null;
         this.clearCallTimers();
+        this.incomingOfferData = null;
       }, 1000);
     }
   }
 
+  stopCallMediaStream(): void {
+    if (this.localCallStream) {
+      this.localCallStream.getTracks().forEach((track: MediaStreamTrack) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
+      this.localCallStream = null;
+    }
+    this.remoteCallStream = null;
+    if (this.callLocalVideoRef && this.callLocalVideoRef.nativeElement) {
+      this.callLocalVideoRef.nativeElement.srcObject = null;
+    }
+    if (this.callRemoteVideoRef && this.callRemoteVideoRef.nativeElement) {
+      this.callRemoteVideoRef.nativeElement.srcObject = null;
+    }
+  }
+
+  resetAutoHideControlsTimer(): void {
+    this.showCallControls = true;
+    if (this.autoHideControlsTimer) {
+      clearTimeout(this.autoHideControlsTimer);
+    }
+    if (this.activeCall && this.activeCall.status === 'connected') {
+      this.autoHideControlsTimer = setTimeout(() => {
+        if (this.activeCall && this.activeCall.status === 'connected') {
+          this.showCallControls = false;
+        }
+      }, 4500);
+    }
+  }
+
+  toggleCallControlsVisibility(): void {
+    this.showCallControls = !this.showCallControls;
+    if (this.showCallControls) {
+      this.resetAutoHideControlsTimer();
+    }
+  }
+
   private startCallTimer(): void {
+    this.clearCallTimers();
+    this.resetAutoHideControlsTimer();
     this.callInterval = setInterval(() => {
-      if (this.activeCall && this.activeCall.status === 'connected') {
-        this.activeCall.duration++;
+      if (this.activeCall) {
+        this.activeCall.duration = (this.activeCall.duration || 0) + 1;
         const mins = Math.floor(this.activeCall.duration / 60);
         const secs = this.activeCall.duration % 60;
         this.callTimeFormatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -358,6 +958,7 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   private clearCallTimers(): void {
     if (this.callInterval) clearInterval(this.callInterval);
     if (this.callRingTimeout) clearTimeout(this.callRingTimeout);
+    if (this.autoHideControlsTimer) clearTimeout(this.autoHideControlsTimer);
     this.callTimeFormatted = '00:00';
   }
 

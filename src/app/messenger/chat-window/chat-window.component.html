@@ -514,4 +514,11 @@
       </div>
     </div>
   </div>
+
+  <!-- Real Device Camera Modal -->
+  <app-camera-modal
+    *ngIf="showCameraModal"
+    (closeModal)="showCameraModal = false"
+    (capturedMedia)="onCameraCapturedMedia($event)"
+  ></app-camera-modal>
 </main>

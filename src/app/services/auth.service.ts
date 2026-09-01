@@ -20,15 +20,35 @@ export interface UserSong {
   url?: string;
 }
 
+export interface PrivacySettings {
+  profilePhotoVisibility: 'Everyone' | 'My Contacts' | 'Nobody';
+  aboutVisibility: 'Everyone' | 'My Contacts' | 'Nobody';
+  lastSeenVisibility: 'Everyone' | 'My Contacts' | 'Nobody';
+  onlineVisibility: 'Everyone' | 'Same as Last Seen';
+  readReceipts: boolean;
+  whoCanContactMe: 'Everyone' | 'My Contacts Only';
+}
+
+export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
+  profilePhotoVisibility: 'Everyone',
+  aboutVisibility: 'Everyone',
+  lastSeenVisibility: 'Everyone',
+  onlineVisibility: 'Everyone',
+  readReceipts: true,
+  whoCanContactMe: 'Everyone'
+};
+
 export interface UserSession {
   id: string;
   phone: string;
   email?: string;
   name: string;
+  username?: string;
   avatar: string;
   statusText: string;
   songs: UserSong[];
   linkedDevices: LinkedDevice[];
+  privacySettings?: PrivacySettings;
 }
 
 export interface UserRecord {
@@ -36,11 +56,13 @@ export interface UserRecord {
   phone: string;
   email?: string;
   name: string;
+  username?: string;
   pass?: string;
   avatar: string;
   statusText: string;
   songs: UserSong[];
   linkedDevices: LinkedDevice[];
+  privacySettings?: PrivacySettings;
 }
 
 @Injectable({
@@ -434,6 +456,57 @@ export class AuthService {
     this.updateProfilePicture(defaultAv);
   }
 
+  updateFullProfile(data: {
+    name: string;
+    username?: string;
+    statusText?: string;
+    avatar?: string;
+  }): { success: boolean; error?: string } {
+    if (!this.currentSession) return { success: false, error: 'User is not logged in.' };
+
+    const trimmedName = (data.name || '').trim();
+    if (!trimmedName) {
+      return { success: false, error: 'Display name cannot be empty.' };
+    }
+
+    let formattedUsername = (data.username || '').trim();
+    if (formattedUsername && !formattedUsername.startsWith('@')) {
+      formattedUsername = `@${formattedUsername}`;
+    }
+
+    if (formattedUsername && !/^@[a-zA-Z0-9_]{3,20}$/.test(formattedUsername)) {
+      return { success: false, error: 'Username must start with @ and contain 3-20 letters, numbers, or underscores.' };
+    }
+
+    this.currentSession.name = trimmedName;
+    this.currentSession.username = formattedUsername || `@user_${this.currentSession.id.slice(-4)}`;
+    if (data.statusText !== undefined) this.currentSession.statusText = data.statusText.trim();
+    if (data.avatar) this.updateProfilePicture(data.avatar);
+
+    this.saveCurrentSessionState();
+    return { success: true };
+  }
+
+  updatePrivacySettings(settings: Partial<PrivacySettings>): PrivacySettings {
+    if (!this.currentSession) return DEFAULT_PRIVACY_SETTINGS;
+
+    this.currentSession.privacySettings = {
+      ...DEFAULT_PRIVACY_SETTINGS,
+      ...(this.currentSession.privacySettings || {}),
+      ...settings
+    };
+
+    this.saveCurrentSessionState();
+    return this.currentSession.privacySettings;
+  }
+
+  getPrivacySettings(): PrivacySettings {
+    if (!this.currentSession || !this.currentSession.privacySettings) {
+      return DEFAULT_PRIVACY_SETTINGS;
+    }
+    return { ...DEFAULT_PRIVACY_SETTINGS, ...this.currentSession.privacySettings };
+  }
+
   updateProfile(avatar?: string, statusText?: string, songs?: UserSong[]): void {
     if (!this.currentSession) return;
 
@@ -478,9 +551,11 @@ export class AuthService {
       phone: user.phone,
       email: user.email,
       name: user.name,
+      username: user.username || `@${user.id}`,
       avatar: user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
       statusText: user.statusText || 'Online 💖',
       songs: user.songs || [],
+      privacySettings: user.privacySettings || { ...DEFAULT_PRIVACY_SETTINGS },
       linkedDevices: user.linkedDevices || [
         {
           id: 'dev_1',
@@ -502,12 +577,14 @@ export class AuthService {
     if (!this.currentSession) return;
     localStorage.setItem('romantic_messenger_session', JSON.stringify(this.currentSession));
 
-    // Also sync to saved users directory
     const users = this.getSavedUsers();
     const phoneKey = this.currentSession.phone.replace(/\s+/g, '').toLowerCase();
     if (users[phoneKey]) {
+      users[phoneKey].name = this.currentSession.name;
+      users[phoneKey].username = this.currentSession.username;
       users[phoneKey].avatar = this.currentSession.avatar;
       users[phoneKey].statusText = this.currentSession.statusText;
+      users[phoneKey].privacySettings = this.currentSession.privacySettings;
       users[phoneKey].songs = this.currentSession.songs;
       users[phoneKey].linkedDevices = this.currentSession.linkedDevices;
       localStorage.setItem('romantic_messenger_users', JSON.stringify(users));

@@ -18,6 +18,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
   @Output() selectContact = new EventEmitter<Contact>();
   @Output() openNewChat = new EventEmitter<void>();
   @Output() openSettings = new EventEmitter<string>();
+  @Output() openProfileModal = new EventEmitter<void>();
 
   @ViewChild('galleryInput') galleryInputRef!: ElementRef<HTMLInputElement>;
   @ViewChild('doodleCanvas') doodleCanvasRef!: ElementRef<HTMLCanvasElement>;
@@ -93,6 +94,8 @@ export class SidebarComponent implements OnInit, OnDestroy {
   toastMessage = '';
   private toastTimeout: any;
 
+  private callLogsSub: any;
+
   constructor(
     private authService: AuthService,
     private messengerService: MessengerService,
@@ -101,10 +104,14 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.refreshData();
+    this.callLogsSub = this.messengerService.callLogs$.subscribe(logs => {
+      this.callLogs = logs;
+    });
   }
 
   ngOnDestroy(): void {
     if (this.storyTimer) clearInterval(this.storyTimer);
+    if (this.callLogsSub) this.callLogsSub.unsubscribe();
   }
 
   refreshData(): void {
@@ -121,12 +128,20 @@ export class SidebarComponent implements OnInit, OnDestroy {
   }
 
   setNavTab(tab: 'chats' | 'status' | 'phone' | 'profile'): void {
-    if (tab === 'profile') {
-      this.router.navigate(['/profile']);
-      return;
-    }
     this.activeNavTab = tab;
+    if (tab === 'profile') {
+      this.openProfileModal.emit();
+    }
     this.refreshData();
+  }
+
+  onCallLogClick(call: CallLog): void {
+    if (!call) return;
+    const targetContact = this.contacts.find(c => c.id === call.contactId || c.name.toLowerCase() === call.contactName.toLowerCase());
+    if (targetContact) {
+      this.selectContact.emit(targetContact);
+      this.setNavTab('chats');
+    }
   }
 
   getTotalUnreadCount(): number {

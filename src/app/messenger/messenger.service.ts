@@ -142,9 +142,12 @@ export class MessengerService {
   private selectedContactSubject = new BehaviorSubject<Contact | null>(this.contacts[0]);
   private typingContactSubject = new BehaviorSubject<{ contactId: string; name: string } | null>(null);
   private messagesSubject = new BehaviorSubject<{ contactId: string; messages: Message[] } | null>(null);
+  private callLogsSubject = new BehaviorSubject<CallLog[]>(this.callLogs);
+  public callLogs$ = this.callLogsSubject.asObservable();
 
   constructor(private authService: AuthService) {
     this.loadContactsFromStorage();
+    this.loadCallLogsFromStorage();
     this.syncCurrentUser();
     this.syncContactAvatars();
     this.initDefaultStatuses();
@@ -427,6 +430,34 @@ export class MessengerService {
     return this.callLogs;
   }
 
+  addCallLog(log: CallLog): void {
+    this.callLogs.unshift(log);
+    this.saveCallLogsToStorage();
+    this.callLogsSubject.next([...this.callLogs]);
+  }
+
+  private loadCallLogsFromStorage(): void {
+    try {
+      const saved = localStorage.getItem('sanctuary_call_logs');
+      if (saved) {
+        const parsed: CallLog[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.callLogs = parsed.map(c => ({
+            ...c,
+            timestamp: new Date(c.timestamp)
+          }));
+          this.callLogsSubject.next([...this.callLogs]);
+        }
+      }
+    } catch (e) {}
+  }
+
+  saveCallLogsToStorage(): void {
+    try {
+      localStorage.setItem('sanctuary_call_logs', JSON.stringify(this.callLogs));
+    } catch (e) {}
+  }
+
   getSelectedContact(): Observable<Contact | null> {
     return this.selectedContactSubject.asObservable();
   }
@@ -605,6 +636,7 @@ export class MessengerService {
       id: 'msg_' + Date.now(),
       senderId: 'me',
       senderName: 'Me',
+      receiverId: contactId,
       text: text,
       timestamp: now,
       timeStr: timeStr,
@@ -648,6 +680,7 @@ export class MessengerService {
       id: 'msg_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
       senderId: 'me',
       senderName: 'Me',
+      receiverId: contactId,
       text: text,
       timestamp: now,
       timeStr: timeStr,
