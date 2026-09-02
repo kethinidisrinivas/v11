@@ -17,12 +17,13 @@
 }
 
 .info-header {
-  height: 64px;
-  padding: 0 16px;
+  height: calc(64px + var(--sat));
+  padding: var(--sat) 16px 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
 }
 
 .info-title {
@@ -203,7 +204,7 @@
 
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
   gap: 8px;
 }
 

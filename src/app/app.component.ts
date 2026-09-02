@@ -161,6 +161,15 @@ export class AppComponent implements OnInit, OnDestroy {
   loginPhone = '';
   loginOtp = '';
 
+  // Secret Code Protection State
+  loginSecretCode = '';
+  registerSecretCode = '';
+  showLoginSecret = false;
+  showRegisterSecret = false;
+  secretCodeError = '';
+  readonly SECRET_CODE = '050605';
+  readonly WRONG_SECRET_MSG = 'Hmm, that doesn,t feel like love. Try again 💔';
+
   // Form Fields - Register
   registerStep: 1 | 2 | 3 = 1; // 1: Phone & Name, 2: OTP verification, 3: Email & Password
   registerPhone = '';
@@ -171,8 +180,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   // Country Flags & Dial Codes State
   countryCodes = COUNTRY_CODES;
-  selectedLoginCountry: CountryCode = COUNTRY_CODES[0]; // default US
-  selectedRegisterCountry: CountryCode = COUNTRY_CODES[0]; // default US
+  selectedLoginCountry: CountryCode = COUNTRY_CODES.find(c => c.code === 'IN') || COUNTRY_CODES[1]; // default India (+91)
+  selectedRegisterCountry: CountryCode = COUNTRY_CODES.find(c => c.code === 'IN') || COUNTRY_CODES[1]; // default India (+91)
   showLoginCountryDropdown = false;
   showRegisterCountryDropdown = false;
   loginCountrySearch = '';
@@ -314,9 +323,19 @@ export class AppComponent implements OnInit, OnDestroy {
     this.clearMessages();
   }
 
+  private validateSecretCode(code: string): boolean {
+    if ((code || '').trim() !== this.SECRET_CODE) {
+      this.secretCodeError = this.WRONG_SECRET_MSG;
+      return false;
+    }
+    this.secretCodeError = '';
+    return true;
+  }
+
   // --- OTP Login Handlers ---
   sendLoginOtp(): void {
     this.clearMessages();
+    if (!this.validateSecretCode(this.loginSecretCode)) return;
     const result = this.authService.sendLoginOtp(this.loginPhone);
     if (result.success) {
       this.successMessage = result.message;
@@ -334,6 +353,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   onLoginWithOtp(): void {
     this.clearMessages();
+    if (!this.validateSecretCode(this.loginSecretCode)) return;
     const result = this.authService.loginWithOtp(this.loginPhone, this.loginOtp);
     if (result.success) {
       this.isLoggedIn = true;
@@ -366,6 +386,7 @@ export class AppComponent implements OnInit, OnDestroy {
   // --- Registration Multi-step Handlers ---
   sendRegisterOtp(): void {
     this.clearMessages();
+    if (!this.validateSecretCode(this.registerSecretCode)) return;
     const result = this.authService.sendRegistrationOtp(this.registerPhone);
     if (result.success) {
       this.successMessage = result.message;
@@ -378,6 +399,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   verifyRegisterOtp(): void {
     this.clearMessages();
+    if (!this.validateSecretCode(this.registerSecretCode)) return;
     const result = this.authService.verifyRegistrationOtp(this.registerPhone, this.registerOtp);
     if (result.success) {
       this.successMessage = result.message;
@@ -389,6 +411,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   completeRegistration(): void {
     this.clearMessages();
+    if (!this.validateSecretCode(this.registerSecretCode)) return;
     const result = this.authService.completePhoneRegistration(
       this.registerPhone,
       this.registerName,
@@ -409,6 +432,7 @@ export class AppComponent implements OnInit, OnDestroy {
   // --- Standard Email Login ---
   onLogin(): void {
     this.clearMessages();
+    if (!this.validateSecretCode(this.loginSecretCode)) return;
     const result = this.authService.login(this.loginEmail, this.loginPassword);
 
     if (result.success) {
@@ -430,15 +454,19 @@ export class AppComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
     this.successMessage = '';
     this.demoOtpAlert = '';
+    this.secretCodeError = '';
   }
 
   private clearFormFields(): void {
     this.loginPassword = '';
     this.loginOtp = '';
+    this.loginSecretCode = '';
     this.registerPassword = '';
     this.registerName = '';
     this.registerEmail = '';
     this.registerOtp = '';
+    this.registerSecretCode = '';
+    this.secretCodeError = '';
     this.registerStep = 1;
     this.clearResendTimer();
   }

@@ -90,6 +90,13 @@ export class AuthService {
     this.isLoggedInSubject.next(this.currentSession !== null);
   }
 
+  private normalizePhone(phone: string): string {
+    if (!phone) return '';
+    const trimmed = phone.trim();
+    if (trimmed.startsWith('+')) return trimmed;
+    return `+91 ${trimmed}`;
+  }
+
   private initDefaultUsers(): void {
     const users = this.getSavedUsers();
     let updated = false;
@@ -97,7 +104,7 @@ export class AuthService {
     const defaultUsers: UserRecord[] = [
       {
         id: 'emma',
-        phone: '+1 555 0101',
+        phone: '+91 98765 0101',
         email: 'emma@love.com',
         name: 'Emma 💖',
         pass: 'password123',
@@ -113,7 +120,7 @@ export class AuthService {
             name: 'Windows Desktop PC',
             platform: 'Windows 11',
             browser: 'Chrome 122.0',
-            location: 'New York, USA',
+            location: 'Mumbai, India',
             lastActive: 'Active Now',
             isCurrent: true,
             loginTime: 'Today at 09:30 AM'
@@ -123,7 +130,7 @@ export class AuthService {
             name: 'iPhone 15 Pro',
             platform: 'iOS 17.3',
             browser: 'Safari Mobile',
-            location: 'New York, USA',
+            location: 'Mumbai, India',
             lastActive: '2 hours ago',
             isCurrent: false,
             loginTime: 'Yesterday at 08:15 PM'
@@ -132,7 +139,7 @@ export class AuthService {
       },
       {
         id: 'sophia',
-        phone: '+1 555 0102',
+        phone: '+91 98765 0102',
         email: 'sophia@love.com',
         name: 'Sophia 💕',
         pass: 'password123',
@@ -145,7 +152,7 @@ export class AuthService {
       },
       {
         id: 'lucas',
-        phone: '+1 555 0103',
+        phone: '+91 98765 0103',
         email: 'lucas@love.com',
         name: 'Lucas 🌹',
         pass: 'password123',
@@ -156,7 +163,7 @@ export class AuthService {
       },
       {
         id: 'lily',
-        phone: '+1 555 0104',
+        phone: '+91 98765 0104',
         email: 'lily@love.com',
         name: 'Lily ✨',
         pass: 'password123',
@@ -185,10 +192,10 @@ export class AuthService {
 
   // --- OTP Operations ---
   sendRegistrationOtp(phone: string): { success: boolean; message: string; otp?: string } {
-    if (!phone || phone.trim().length < 6) {
+    const cleanPhone = this.normalizePhone(phone);
+    if (!cleanPhone || cleanPhone.length < 6) {
       return { success: false, message: 'Please enter a valid phone number.' };
     }
-    const cleanPhone = phone.trim();
     const otp = '123456'; // Simulated standard test OTP
     this.pendingOtps[cleanPhone] = otp;
     return {
@@ -199,7 +206,7 @@ export class AuthService {
   }
 
   verifyRegistrationOtp(phone: string, code: string): { success: boolean; message: string } {
-    const cleanPhone = phone.trim();
+    const cleanPhone = this.normalizePhone(phone);
     if (!code || code.trim() !== (this.pendingOtps[cleanPhone] || '123456')) {
       return { success: false, message: 'Invalid OTP code. Please enter 123456.' };
     }
@@ -274,10 +281,10 @@ export class AuthService {
 
   // --- OTP Login ---
   sendLoginOtp(phone: string): { success: boolean; message: string; otp?: string } {
-    if (!phone || phone.trim().length < 6) {
+    const cleanPhone = this.normalizePhone(phone);
+    if (!cleanPhone || cleanPhone.length < 6) {
       return { success: false, message: 'Please enter a valid phone number.' };
     }
-    const cleanPhone = phone.trim();
     const user = this.findUserByPhone(cleanPhone);
     if (!user) {
       return { success: false, message: 'Phone number not found. Please register first.' };
@@ -287,13 +294,13 @@ export class AuthService {
     this.pendingOtps[cleanPhone] = otp;
     return {
       success: true,
-      message: `OTP sent to ${cleanPhone}. (Demo OTP: ${otp})`,
+      message: `OTP sent to ${phone.trim()}. (Demo OTP: ${otp})`,
       otp
     };
   }
 
   loginWithOtp(phone: string, code: string): { success: boolean; message: string } {
-    const cleanPhone = phone.trim();
+    const cleanPhone = this.normalizePhone(phone);
     const user = this.findUserByPhone(cleanPhone);
     if (!user) {
       return { success: false, message: 'Phone number not found.' };

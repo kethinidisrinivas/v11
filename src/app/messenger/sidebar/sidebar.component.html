@@ -586,15 +586,14 @@
           />
         </div>
 
-        <!-- Phone Field with Country Code Selection -->
+        <!-- Phone Field with Fixed Indian Country Code -->
         <div class="form-group">
           <label class="form-label">Phone Number *</label>
           <div class="phone-input-combined" style="display: flex; gap: 8px;">
-            <select class="form-input country-code-select" [(ngModel)]="contactForm.selectedCountryCode" style="width: 110px; background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 6px 8px; font-size: 0.85rem; outline: none; cursor: pointer;">
-              <option *ngFor="let c of countryCodes" [value]="c.dialCode" style="background: #051424; color: #fff;">
-                {{ c.flag }} {{ c.dialCode }}
-              </option>
-            </select>
+            <div class="india-prefix-badge" style="display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 6px 12px; font-size: 0.85rem; font-weight: 600; white-space: nowrap;">
+              <span class="flag-icon">🇮🇳</span>
+              <span>+91</span>
+            </div>
 
             <input
               type="tel"

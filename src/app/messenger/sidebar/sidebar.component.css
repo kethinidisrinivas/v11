@@ -19,7 +19,7 @@
 
 /* Sidebar Top Header */
 .sidebar-header {
-  padding: 14px 16px;
+  padding: calc(14px + var(--sat)) 16px 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -426,13 +426,18 @@
 .song-artist { font-size: 0.68rem; color: rgba(255, 255, 255, 0.4); }
 
 /* Footer Navigation Bar */
-.sidebar-footer-nav { display: flex; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(5, 20, 36, 0.6); }
-.footer-nav-item { flex: 1; background: transparent; border: none; color: rgba(255, 255, 255, 0.45); font-family: 'Manrope', sans-serif; font-size: 0.65rem; font-weight: 700; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; }
+.sidebar-footer-nav {
+  display: flex;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 20, 36, 0.6);
+  padding-bottom: max(8px, var(--sab));
+}
+.footer-nav-item { flex: 1; background: transparent; border: none; color: rgba(255, 255, 255, 0.45); font-family: 'Manrope', sans-serif; font-size: 0.65rem; font-weight: 700; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; min-height: 44px; }
 .footer-nav-item.active { color: #e0b0ff; }
 .footer-nav-item .material-icons-outlined { font-size: 1.2rem; }
 
 /* Toast Banner */
-.toast-banner { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); background: rgba(18, 34, 51, 0.95); border: 1px solid rgba(224, 176, 255, 0.4); color: #e0b0ff; padding: 8px 16px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); z-index: 90; white-space: nowrap; }
+.toast-banner { position: absolute; bottom: calc(60px + var(--sab)); left: 50%; transform: translateX(-50%); background: rgba(18, 34, 51, 0.95); border: 1px solid rgba(224, 176, 255, 0.4); color: #e0b0ff; padding: 8px 16px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); z-index: 90; white-space: nowrap; }
 
 /* FULL-SCREEN WHATSAPP STORY VIEWER OVERLAY */
 .story-viewer-overlay {
@@ -450,6 +455,7 @@
   width: 100%;
   max-width: 420px;
   height: 100vh;
+  height: 100dvh;
   background: #051424;
   display: flex;
   flex-direction: column;
@@ -458,7 +464,7 @@
 
 .multi-progress-bar-container {
   position: absolute;
-  top: 12px;
+  top: calc(12px + var(--sat));
   left: 12px;
   right: 12px;
   display: flex;
@@ -483,7 +489,7 @@
 
 .story-user-header {
   position: absolute;
-  top: 24px;
+  top: calc(24px + var(--sat));
   left: 14px;
   right: 14px;
   display: flex;
