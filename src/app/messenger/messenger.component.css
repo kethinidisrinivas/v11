@@ -1284,3 +1284,179 @@
     max-width: calc(100vw - 140px);
   }
 }
+
+/* Interactive Circular Crop & Adjust Profile Photo Modal Styles */
+.crop-modal-card {
+  max-width: 400px !important;
+  text-align: center;
+  padding: 22px;
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(224, 176, 255, 0.25) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(224, 176, 255, 0.15) !important;
+}
+
+.crop-viewport-container {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  border: 3px solid #e0b0ff;
+  box-shadow: 0 0 24px rgba(224, 176, 255, 0.35);
+  background: #000;
+}
+
+.crop-viewport-container:active {
+  cursor: grabbing;
+}
+
+.crop-circular-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: inset 0 0 0 2px rgba(224, 176, 255, 0.6);
+}
+
+.crop-image-wrapper {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crop-raw-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.05s ease-out;
+  pointer-events: none;
+}
+
+.crop-controls-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.crop-zoom-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crop-zoom-slider-row .zoom-icon {
+  color: rgba(224, 176, 255, 0.8);
+  font-size: 1.1rem;
+}
+
+.crop-zoom-slider {
+  flex: 1;
+  accent-color: #e0b0ff;
+  cursor: pointer;
+}
+
+.crop-scale-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #e0b0ff;
+  min-width: 42px;
+  text-align: right;
+}
+
+.crop-action-buttons-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.btn-crop-tool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-crop-tool:hover {
+  background: rgba(224, 176, 255, 0.15);
+  border-color: #e0b0ff;
+  color: #e0b0ff;
+}
+
+.crop-live-preview-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 14px;
+  border-radius: 12px;
+}
+
+.preview-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.preview-circle-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #e0b0ff;
+  box-shadow: 0 0 10px rgba(224, 176, 255, 0.4);
+}
+
+.preview-circle-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modal-footer-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.btn-modal-confirm {
+  background: #e0b0ff;
+  color: #051424;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 10px 22px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 14px rgba(224, 176, 255, 0.3);
+}
+
+.btn-modal-confirm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(224, 176, 255, 0.45);
+}

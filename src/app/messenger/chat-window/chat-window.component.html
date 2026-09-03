@@ -228,8 +228,8 @@
 
             <!-- Voice Note Attachment -->
             <div *ngIf="msg.attachment?.type === 'voice'" class="voice-attachment-card">
-              <button type="button" class="btn-play-voice">
-                <span class="material-icons-outlined">play_arrow</span>
+              <button type="button" class="btn-play-voice" (click)="playVoiceNote(msg)">
+                <span class="material-icons-outlined">{{ playingVoiceMsgId === msg.id ? 'pause' : 'play_arrow' }}</span>
               </button>
               <div class="voice-waveform">
                 <span class="wave-bar h-1"></span>
@@ -290,19 +290,18 @@
       </div>
     </div>
 
-    <!-- Dynamic Contact Typing Indicator Bubble -->
-    <div class="message-row received-row" *ngIf="typingStatus?.contactId === contact.id">
-      <div class="message-bubble message-received typing-sweet-bubble">
-        <span class="typing-sweet-content">
-          <span class="material-icons-outlined typing-heart-icon animate-pulse">favorite</span>
-          <span class="typing-sweet-text"><strong>{{ typingStatus?.name }}</strong> is typing something sweet</span>
-        </span>
-      </div>
-    </div>
   </div>
 
   <!-- Message Input Bar Footer -->
   <footer class="chat-input-footer" *ngIf="contact">
+    <!-- Dynamic Contact Typing Indicator Banner (Directly Above Input Bar) -->
+    <div class="composer-typing-banner" *ngIf="typingStatus?.contactId === contact.id">
+      <span class="typing-sweet-content">
+        <span class="material-icons-outlined typing-heart-icon animate-pulse">favorite</span>
+        <span class="typing-sweet-text"><strong>{{ typingStatus?.name }}</strong> is typing something sweet</span>
+      </span>
+    </div>
+
     <!-- Staged Files Preview Banner -->
     <div class="staged-files-banner" *ngIf="stagedFiles.length > 0">
       <div class="staged-files-header">
@@ -374,10 +373,12 @@
       <!-- Text Field -->
       <div class="text-input-container">
         <textarea
+          #chatTextarea
           class="chat-textarea"
           [placeholder]="editingMessage ? 'Edit your message...' : (stagedFiles.length > 0 ? 'Add a caption...' : 'Whisper something...')"
           rows="1"
           [(ngModel)]="newMessageText"
+          (input)="onTextInput()"
           (keydown)="onKeyDown($event)"
         ></textarea>
 
@@ -425,16 +426,16 @@
       </button>
     </div>
 
-    <!-- Emoji Picker Popover -->
-    <div class="popover-menu emoji-picker-menu" *ngIf="showEmojiPicker">
-      <div class="emoji-grid">
-        <span
-          *ngFor="let emoji of emojiList"
-          class="emoji-item"
-          (click)="addEmoji(emoji)"
-        >{{ emoji }}</span>
+      <!-- Emoji Picker Popover -->
+      <div class="popover-menu emoji-picker-menu" *ngIf="showEmojiPicker">
+        <div class="emoji-grid">
+          <span
+            *ngFor="let emoji of emojiList"
+            class="emoji-item"
+            (click)="addEmoji(emoji, chatTextarea)"
+          >{{ emoji }}</span>
+        </div>
       </div>
-    </div>
   </footer>
 
   <!-- Profile Image Lightbox Overlay -->

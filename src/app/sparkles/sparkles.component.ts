@@ -12,18 +12,8 @@ interface Sparkle {
 
 @Component({
   selector: 'app-sparkles',
-  template: `<canvas #sparklesCanvas class="sparkles-canvas"></canvas>`,
-  styles: [`
-    .sparkles-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 1;
-    }
-  `]
+  templateUrl: './sparkles.component.html',
+  styleUrls: ['./sparkles.component.css']
 })
 export class SparklesComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('sparklesCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;

@@ -16,18 +16,8 @@ interface Heart {
 
 @Component({
   selector: 'app-heart-emitter',
-  template: `<canvas #heartCanvas class="heart-canvas"></canvas>`,
-  styles: [`
-    .heart-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 0;
-    }
-  `]
+  templateUrl: './heart-emitter.component.html',
+  styleUrls: ['./heart-emitter.component.css']
 })
 export class HeartEmitterComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('heartCanvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;

@@ -140,7 +140,7 @@ export class MessengerService {
   };
 
   private selectedContactSubject = new BehaviorSubject<Contact | null>(this.contacts[0]);
-  private typingContactSubject = new BehaviorSubject<{ contactId: string; name: string } | null>(null);
+  private typingContactSubject = new BehaviorSubject<{ contactId: string; userId: string; name: string; updatedAt: number } | null>(null);
   private messagesSubject = new BehaviorSubject<{ contactId: string; messages: Message[] } | null>(null);
   private callLogsSubject = new BehaviorSubject<CallLog[]>(this.callLogs);
   public callLogs$ = this.callLogsSubject.asObservable();
@@ -400,6 +400,73 @@ export class MessengerService {
     }
   }
 
+  getStatusGroups(): UserStatusGroup[] {
+    this.cleanExpiredStatuses();
+    return Object.values(this.statusGroupsMap);
+  }
+
+  addStatusItem(item: Omit<StatusItem, 'id' | 'timestamp' | 'timeStr' | 'seen'>): void {
+    const now = Date.now();
+    const newItem: StatusItem = {
+      id: 'st_' + now,
+      ...item,
+      timestamp: now,
+      timeStr: 'Just now',
+      seen: true
+    };
+    if (!this.statusGroupsMap['me']) {
+      this.statusGroupsMap['me'] = {
+        contactId: 'me',
+        contactName: this.currentUser.name,
+        contactAvatar: this.currentUser.avatar,
+        isMine: true,
+        hasUnseen: false,
+        lastUpdated: 'Just now',
+        items: []
+      };
+    }
+    this.statusGroupsMap['me'].items.unshift(newItem);
+    this.statusGroupsMap['me'].lastUpdated = 'Just now';
+  }
+
+  markStatusGroupSeen(contactId: string): void {
+    const group = this.statusGroupsMap[contactId];
+    if (group) {
+      group.items.forEach(i => (i.seen = true));
+      group.hasUnseen = false;
+    }
+  }
+
+  clearCallLogs(): void {
+    this.callLogs = [];
+  }
+
+  startCall(mode: 'audio' | 'video', contactId: string, contactName: string, contactAvatar: string) {
+    const newLog: CallLog = {
+      id: 'call_' + Date.now(),
+      contactId,
+      contactName,
+      contactAvatar,
+      type: 'outgoing',
+      mode,
+      timestamp: new Date(),
+      timeStr: 'Just now',
+      duration: 0,
+      formattedDuration: '00:00'
+    };
+    this.callLogs.unshift(newLog);
+
+    return {
+      type: mode,
+      status: 'calling' as const,
+      contactId,
+      contactName,
+      contactAvatar,
+      duration: 0,
+      direction: 'outgoing' as const
+    };
+  }
+
   replyToStatus(contactId: string, replyText: string, statusItem: StatusItem): void {
     const contextMsg = statusItem.caption || statusItem.textContent || 'Status Story';
     const text = `Replying to status: "${contextMsg}" -> ${replyText}`;
@@ -462,15 +529,23 @@ export class MessengerService {
     return this.selectedContactSubject.asObservable();
   }
 
-  getTypingStatus(): Observable<{ contactId: string; name: string } | null> {
+  getTypingStatus(): Observable<{ contactId: string; userId: string; name: string; updatedAt: number } | null> {
     return this.typingContactSubject.asObservable();
   }
 
-  setTypingStatus(contactId: string, name: string, isTyping: boolean): void {
+  setTypingStatus(contactId: string, name: string, isTyping: boolean, userId: string = 'me'): void {
     if (isTyping) {
-      this.typingContactSubject.next({ contactId, name });
+      this.typingContactSubject.next({
+        contactId,
+        userId: userId || 'me',
+        name,
+        updatedAt: Date.now()
+      });
     } else {
-      this.typingContactSubject.next(null);
+      const current = this.typingContactSubject.value;
+      if (!current || (current.contactId === contactId && (current.userId === userId || userId === 'me'))) {
+        this.typingContactSubject.next(null);
+      }
     }
   }
 
@@ -658,7 +733,12 @@ export class MessengerService {
       }, 1500);
 
       setTimeout(() => {
-        this.typingContactSubject.next({ contactId: contact.id, name: contact.name });
+        this.typingContactSubject.next({
+          contactId: contact.id,
+          userId: contact.id,
+          name: contact.name,
+          updatedAt: Date.now()
+        });
       }, 2500);
 
       setTimeout(() => {

@@ -102,16 +102,25 @@ export class SidebarComponent implements OnInit, OnDestroy {
     private router: Router
   ) {}
 
+  private avatarSub: any;
+
   ngOnInit(): void {
     this.refreshData();
     this.callLogsSub = this.messengerService.callLogs$.subscribe(logs => {
       this.callLogs = logs;
+    });
+    this.avatarSub = this.authService.avatarChanged$.subscribe(data => {
+      if (this.currentUser && (data.userId === this.currentUser.id || data.phone === this.currentUser.phone)) {
+        this.currentUser.avatar = data.avatar;
+        this.profileAvatarUrl = data.avatar;
+      }
     });
   }
 
   ngOnDestroy(): void {
     if (this.storyTimer) clearInterval(this.storyTimer);
     if (this.callLogsSub) this.callLogsSub.unsubscribe();
+    if (this.avatarSub) this.avatarSub.unsubscribe();
   }
 
   refreshData(): void {

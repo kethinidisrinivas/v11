@@ -63,6 +63,19 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   profileSaveSuccess = '';
   showPreviewAvatarModal = false;
   stagedAvatarUrl = '';
+
+  // Interactive Circular Crop & Adjust Profile Photo State
+  showCropModal = false;
+  stagedRawImageUrl = '';
+  cropScale = 1.0;
+  cropPanX = 0;
+  cropPanY = 0;
+  cropRotation = 0;
+  isDraggingCrop = false;
+  dragStartX = 0;
+  dragStartY = 0;
+  croppedPreviewUrl = '';
+  private cropLoadedImage: HTMLImageElement | null = null;
   showShareProfileContactModal = false;
   blockedContactsList: Contact[] = [];
   profileQrUrl = '';
@@ -122,12 +135,21 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
       })
     );
 
-    // Subscribe to typing indicator
+    // Subscribe to typing indicator with current-user filtering & stale state protection
     this.subscriptions.add(
       this.messengerService.getTypingStatus().subscribe(status => {
-        this.typingStatus = status;
-        if (status && this.selectedContact?.id === status.contactId) {
-          this.activeMessages = this.messengerService.getMessages(status.contactId);
+        const myId = this.messengerService.getCurrentUser()?.id || 'me';
+        if (
+          status &&
+          this.selectedContact &&
+          status.contactId === this.selectedContact.id &&
+          status.userId !== 'me' &&
+          status.userId !== myId &&
+          (Date.now() - (status.updatedAt || 0)) < 3500
+        ) {
+          this.typingStatus = status;
+        } else {
+          this.typingStatus = null;
         }
       })
     );
@@ -170,6 +192,16 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
     this.subscriptions.add(
       this.webRtcService.remoteAction$.subscribe(data => {
         this.handleRemoteCallAction(data.action, data.payload);
+      })
+    );
+
+    // Subscribe to avatar changes to keep profile photo synced everywhere in real time
+    this.subscriptions.add(
+      this.authService.avatarChanged$.subscribe(data => {
+        if (this.currentUser && (data.userId === this.currentUser.id || data.phone === this.currentUser.phone)) {
+          this.currentUser = { ...this.currentUser, avatar: data.avatar };
+          this.editProfileForm.avatar = data.avatar;
+        }
       })
     );
   }
@@ -484,37 +516,194 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   onPhotoSelectedWithPreview(event: Event): void {
+    this.onPhotoSelectedForCrop(event);
+  }
+
+  onPhotoSelectedForCrop(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
+
     const file = input.files[0];
-    if (!file.type.startsWith('image/')) {
-      this.showToast('Please select a valid image file');
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type.toLowerCase()) && !file.type.startsWith('image/')) {
+      this.showToast('Please select a valid image file (JPG, PNG, WEBP)');
+      input.value = '';
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
-      this.stagedAvatarUrl = reader.result as string;
-      this.showPreviewAvatarModal = true;
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        this.cropLoadedImage = img;
+        this.stagedRawImageUrl = dataUrl;
+        this.resetCropAdjustments();
+        this.showCropModal = true;
+        this.updateCroppedPreview();
+      };
+      img.onerror = () => {
+        this.showToast('Failed to load selected image. Please try another file.');
+      };
+      img.src = dataUrl;
     };
+
     reader.readAsDataURL(file);
     input.value = '';
   }
 
-  confirmStagedAvatar(): void {
-    if (!this.stagedAvatarUrl) return;
-    this.editProfileForm.avatar = this.stagedAvatarUrl;
-    this.authService.updateProfilePicture(this.stagedAvatarUrl);
-    this.currentUser = { ...this.currentUser, avatar: this.stagedAvatarUrl };
+  resetCropAdjustments(): void {
+    this.cropScale = 1.0;
+    this.cropPanX = 0;
+    this.cropPanY = 0;
+    this.cropRotation = 0;
+    this.isDraggingCrop = false;
+    this.updateCroppedPreview();
+  }
+
+  rotateCropPhoto(): void {
+    this.cropRotation = (this.cropRotation + 90) % 360;
+    this.updateCroppedPreview();
+  }
+
+  onZoomSliderChange(event: Event): void {
+    const val = parseFloat((event.target as HTMLInputElement).value);
+    this.cropScale = isNaN(val) ? 1.0 : val;
+    this.updateCroppedPreview();
+  }
+
+  onCropWheel(event: WheelEvent): void {
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 0.1 : -0.1;
+    this.cropScale = Math.min(Math.max(1.0, this.cropScale + delta), 3.0);
+    this.updateCroppedPreview();
+  }
+
+  onCropMouseDown(event: MouseEvent): void {
+    event.preventDefault();
+    this.isDraggingCrop = true;
+    this.dragStartX = event.clientX - this.cropPanX;
+    this.dragStartY = event.clientY - this.cropPanY;
+  }
+
+  onCropMouseMove(event: MouseEvent): void {
+    if (!this.isDraggingCrop) return;
+    event.preventDefault();
+    this.cropPanX = event.clientX - this.dragStartX;
+    this.cropPanY = event.clientY - this.dragStartY;
+    this.updateCroppedPreview();
+  }
+
+  onCropMouseUp(): void {
+    this.isDraggingCrop = false;
+  }
+
+  onCropTouchStart(event: TouchEvent): void {
+    if (event.touches.length === 1) {
+      this.isDraggingCrop = true;
+      this.dragStartX = event.touches[0].clientX - this.cropPanX;
+      this.dragStartY = event.touches[0].clientY - this.cropPanY;
+    }
+  }
+
+  onCropTouchMove(event: TouchEvent): void {
+    if (this.isDraggingCrop && event.touches.length === 1) {
+      event.preventDefault();
+      this.cropPanX = event.touches[0].clientX - this.dragStartX;
+      this.cropPanY = event.touches[0].clientY - this.dragStartY;
+      this.updateCroppedPreview();
+    }
+  }
+
+  onCropTouchEnd(): void {
+    this.isDraggingCrop = false;
+  }
+
+  private updateCroppedPreview(): void {
+    if (!this.cropLoadedImage) return;
+    this.croppedPreviewUrl = this.renderCroppedCanvas(150);
+  }
+
+  renderCroppedCanvas(outputSize: number = 400): string {
+    if (!this.cropLoadedImage) return '';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    const img = this.cropLoadedImage;
+    ctx.clearRect(0, 0, outputSize, outputSize);
+
+    ctx.save();
+    ctx.translate(outputSize / 2, outputSize / 2);
+    ctx.rotate((this.cropRotation * Math.PI) / 180);
+    ctx.scale(this.cropScale, this.cropScale);
+
+    const imgAspect = img.width / img.height;
+    let drawW = outputSize;
+    let drawH = outputSize;
+
+    if (imgAspect > 1) {
+      drawW = outputSize * imgAspect;
+      drawH = outputSize;
+    } else {
+      drawW = outputSize;
+      drawH = outputSize / imgAspect;
+    }
+
+    const scaleFactor = outputSize / 240;
+    const offsetX = this.cropPanX * scaleFactor;
+    const offsetY = this.cropPanY * scaleFactor;
+
+    ctx.drawImage(
+      img,
+      -drawW / 2 + offsetX,
+      -drawH / 2 + offsetY,
+      drawW,
+      drawH
+    );
+
+    ctx.restore();
+    return canvas.toDataURL('image/jpeg', 0.92);
+  }
+
+  confirmCropAndSavePhoto(): void {
+    if (!this.cropLoadedImage) return;
+
+    const finalCroppedUrl = this.renderCroppedCanvas(400);
+    if (!finalCroppedUrl) return;
+
+    this.authService.updateProfilePicture(finalCroppedUrl);
+    this.currentUser = { ...this.currentUser, avatar: finalCroppedUrl };
+    this.editProfileForm.avatar = finalCroppedUrl;
     this.messengerService.syncContactAvatars();
+
+    this.showCropModal = false;
     this.showPreviewAvatarModal = false;
-    this.stagedAvatarUrl = '';
-    this.showToast('Profile photo updated! 📸');
+    this.stagedRawImageUrl = '';
+    this.cropLoadedImage = null;
+    this.showToast('Profile photo updated successfully! 📸');
+  }
+
+  cancelCropPhoto(): void {
+    this.showCropModal = false;
+    this.showPreviewAvatarModal = false;
+    this.stagedRawImageUrl = '';
+    this.cropLoadedImage = null;
+    this.isDraggingCrop = false;
+  }
+
+  confirmStagedAvatar(): void {
+    this.confirmCropAndSavePhoto();
   }
 
   cancelStagedAvatar(): void {
-    this.showPreviewAvatarModal = false;
-    this.stagedAvatarUrl = '';
+    this.cancelCropPhoto();
   }
 
   updatePrivacyControl(key: keyof PrivacySettings, val: any): void {

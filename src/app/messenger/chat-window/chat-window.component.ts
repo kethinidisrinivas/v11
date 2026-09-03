@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewChecked, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewChecked, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
 import { Contact, Message, Attachment, QuotedMessagePreview } from '../messenger.model';
 import { MessengerService } from '../messenger.service';
 import { CameraCapturedEvent } from '../camera-modal/camera-modal.component';
@@ -19,7 +19,7 @@ export interface StagedFile {
   templateUrl: './chat-window.component.html',
   styleUrls: ['./chat-window.component.css']
 })
-export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
+export class ChatWindowComponent implements AfterViewChecked, OnDestroy, OnChanges {
   @Input() contact: Contact | null = null;
   @Input() messages: Message[] = [];
   @Input() typingStatus: { contactId: string; name: string } | null = null;
@@ -76,10 +76,15 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
   // Reaction Emojis
   reactionEmojis = ['❤️', '😂', '😍', '😢', '😡', '👍', '👎'];
 
-  // Voice recording simulation state
+  // Voice recording & playback state
   isRecordingVoice = false;
   recordingSeconds = 0;
   private recordingInterval: any;
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
+  private activeAudio: HTMLAudioElement | null = null;
+  playingVoiceMsgId: string | null = null;
+  private typingTimer: any;
 
   // Emojis collection
   emojiList = ['✨', '💖', '🌸', '🚀', '🌲', '☕', '🎵', '💫', '🌌', '🥰', '🤗', '🔥', '🎉', '💌', '🎧', '👍', '🙌', '💯'];
@@ -87,6 +92,21 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
   private shouldScrollToBottom = true;
 
   constructor(private messengerService: MessengerService) {}
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['messages']) {
+      const prevMsgs = changes['messages'].previousValue as Message[] | undefined;
+      const currMsgs = changes['messages'].currentValue as Message[] | undefined;
+
+      if (!prevMsgs || prevMsgs.length === 0 || (currMsgs && currMsgs.length > prevMsgs.length)) {
+        this.shouldScrollToBottom = true;
+      }
+    }
+
+    if (changes['contact'] && changes['contact'].previousValue?.id !== changes['contact'].currentValue?.id) {
+      this.shouldScrollToBottom = true;
+    }
+  }
 
   ngAfterViewChecked(): void {
     if (this.shouldScrollToBottom) {
@@ -99,10 +119,47 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
     if (this.recordingInterval) clearInterval(this.recordingInterval);
     if (this.toastTimeout) clearTimeout(this.toastTimeout);
     if (this.longPressTimer) clearTimeout(this.longPressTimer);
+    if (this.typingTimer) clearTimeout(this.typingTimer);
+    if (this.contact) {
+      const currentUser = this.messengerService.getCurrentUser();
+      this.messengerService.setTypingStatus(this.contact.id, currentUser?.name || 'Me', false, currentUser?.id || 'me');
+    }
+    if (this.activeAudio) {
+      this.activeAudio.pause();
+      this.activeAudio = null;
+    }
+  }
+
+  onTextInput(): void {
+    if (!this.contact) return;
+    const text = (this.newMessageText || '').trim();
+    const contactId = this.contact.id;
+    const currentUser = this.messengerService.getCurrentUser();
+    const myName = currentUser?.name || 'Me';
+    const myId = currentUser?.id || 'me';
+
+    if (text.length === 0) {
+      if (this.typingTimer) clearTimeout(this.typingTimer);
+      this.messengerService.setTypingStatus(contactId, myName, false, myId);
+      return;
+    }
+
+    this.messengerService.setTypingStatus(contactId, myName, true, myId);
+
+    if (this.typingTimer) clearTimeout(this.typingTimer);
+    this.typingTimer = setTimeout(() => {
+      this.messengerService.setTypingStatus(contactId, myName, false, myId);
+    }, 2500);
   }
 
   onSend(): void {
     if (this.isUploadingStaged) return;
+
+    if (this.typingTimer) clearTimeout(this.typingTimer);
+    if (this.contact) {
+      const currentUser = this.messengerService.getCurrentUser();
+      this.messengerService.setTypingStatus(this.contact.id, currentUser?.name || 'Me', false, currentUser?.id || 'me');
+    }
 
     if (this.stagedFiles.length > 0 && this.contact) {
       this.isUploadingStaged = true;
@@ -188,8 +245,18 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
     this.showAttachMenu = false;
   }
 
-  addEmoji(emoji: string): void {
-    this.newMessageText += emoji;
+  addEmoji(emoji: string, textareaEl?: HTMLTextAreaElement): void {
+    if (textareaEl && typeof textareaEl.selectionStart === 'number') {
+      const start = textareaEl.selectionStart;
+      const end = textareaEl.selectionEnd;
+      this.newMessageText = this.newMessageText.substring(0, start) + emoji + this.newMessageText.substring(end);
+      setTimeout(() => {
+        textareaEl.selectionStart = textareaEl.selectionEnd = start + emoji.length;
+        textareaEl.focus();
+      }, 10);
+    } else {
+      this.newMessageText += emoji;
+    }
   }
 
   toggleAttachMenu(): void {
@@ -345,32 +412,101 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
     }, 300);
   }
 
-  toggleVoiceRecording(): void {
+  async toggleVoiceRecording(): Promise<void> {
     if (!this.isRecordingVoice) {
       this.isRecordingVoice = true;
       this.recordingSeconds = 0;
+      this.audioChunks = [];
       this.recordingInterval = setInterval(() => {
         this.recordingSeconds++;
       }, 1000);
+
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this.mediaRecorder = new MediaRecorder(stream);
+          this.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) this.audioChunks.push(event.data);
+          };
+          this.mediaRecorder.start();
+        } catch (err) {
+          console.warn('Microphone access unavailable, falling back to audio duration timer:', err);
+        }
+      }
     } else {
       clearInterval(this.recordingInterval);
       this.isRecordingVoice = false;
-      const durationStr = `0:${this.recordingSeconds.toString().padStart(2, '0')}`;
+      const durationSecs = this.recordingSeconds || 1;
+      const mins = Math.floor(durationSecs / 60);
+      const secs = durationSecs % 60;
+      const durationStr = `${mins}:${secs.toString().padStart(2, '0')}`;
 
-      this.sendMessage.emit({
-        text: 'Voice note 🎙️',
-        attachment: {
-          name: 'Voice_Note.mp3',
-          type: 'voice',
-          url: '#',
-          duration: durationStr
-        },
-        replyTo: this.replyingToMessage ? { ...this.replyingToMessage } : undefined
-      });
-      this.replyingToMessage = null;
+      let voiceUrl = '#';
+
+      if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+        this.mediaRecorder.onstop = () => {
+          const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+          voiceUrl = URL.createObjectURL(blob);
+          this.sendVoiceNoteMessage(durationStr, voiceUrl);
+          this.mediaRecorder?.stream.getTracks().forEach(t => t.stop());
+          this.mediaRecorder = null;
+        };
+        this.mediaRecorder.stop();
+      } else {
+        this.sendVoiceNoteMessage(durationStr, voiceUrl);
+      }
       this.recordingSeconds = 0;
-      this.shouldScrollToBottom = true;
     }
+  }
+
+  private sendVoiceNoteMessage(durationStr: string, voiceUrl: string): void {
+    this.sendMessage.emit({
+      text: 'Voice note 🎙️',
+      attachment: {
+        name: `Voice_Note_${Date.now()}.mp3`,
+        type: 'voice',
+        url: voiceUrl,
+        duration: durationStr
+      },
+      replyTo: this.replyingToMessage ? { ...this.replyingToMessage } : undefined
+    });
+    this.replyingToMessage = null;
+    this.shouldScrollToBottom = true;
+  }
+
+  playVoiceNote(msg: Message): void {
+    if (!msg.attachment || !msg.attachment.url || msg.attachment.url === '#') {
+      this.showToast('Playing voice note preview 🎵');
+      return;
+    }
+
+    if (this.playingVoiceMsgId === msg.id && this.activeAudio) {
+      this.activeAudio.pause();
+      this.playingVoiceMsgId = null;
+      this.activeAudio = null;
+      return;
+    }
+
+    if (this.activeAudio) {
+      this.activeAudio.pause();
+    }
+
+    const audio = new Audio(msg.attachment.url);
+    this.activeAudio = audio;
+    this.playingVoiceMsgId = msg.id;
+
+    audio.play().catch(e => {
+      this.showToast('Playing voice note 🎵');
+    });
+
+    audio.onended = () => {
+      this.playingVoiceMsgId = null;
+      this.activeAudio = null;
+    };
+  }
+
+  cancelReply(): void {
+    this.replyingToMessage = null;
   }
 
   // --- Message Action Handlers ---
@@ -433,6 +569,7 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
   startReply(msg: Message): void {
     if (msg.isDeletedForEveryone) return;
     this.editingMessage = null;
+    this.exitSelectionMode();
     this.replyingToMessage = {
       id: msg.id,
       senderName: msg.senderId === 'me' ? 'You' : msg.senderName,
@@ -442,13 +579,10 @@ export class ChatWindowComponent implements AfterViewChecked, OnDestroy {
     this.closeActionMenu();
   }
 
-  cancelReply(): void {
-    this.replyingToMessage = null;
-  }
-
   startEdit(msg: Message): void {
     if (msg.senderId !== 'me' || msg.isDeletedForEveryone) return;
     this.replyingToMessage = null;
+    this.exitSelectionMode();
     this.editingMessage = msg;
     this.newMessageText = msg.text || '';
     this.closeActionMenu();
