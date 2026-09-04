@@ -31,3 +31,5 @@ build/
 
 ### VS Code ###
 .vscode/
+# Exclude Firebase Service Account
+firebase-service-account.json
