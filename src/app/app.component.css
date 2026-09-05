@@ -73,16 +73,11 @@ app-galaxy {
   z-index: 10;
   padding: max(16px, calc(12px + var(--sat))) max(16px, calc(12px + var(--sar))) max(16px, calc(12px + var(--sab))) max(16px, calc(12px + var(--sal)));
   box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+  overflow: hidden;
 }
 
 .auth-card-container::-webkit-scrollbar,
 .auth-card::-webkit-scrollbar,
-.auth-card-body::-webkit-scrollbar,
 .auth-section::-webkit-scrollbar,
 .auth-form::-webkit-scrollbar {
   display: none !important;
@@ -96,6 +91,8 @@ app-galaxy {
   overflow: hidden;
   width: 100%;
   height: 100%;
+  flex: 1;
+  min-height: 0;
   background: rgba(15, 12, 28, 0.65);
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
@@ -114,31 +111,34 @@ app-galaxy {
 .auth-card-body {
   width: 100%;
   height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 24px 18px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+  justify-content: flex-start;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   z-index: 1;
+  scrollbar-width: thin;
+  scrollbar-color: #000000 transparent;
 }
 
-.auth-card::-webkit-scrollbar-thumb,
-.auth-card-body::-webkit-scrollbar-thumb,
-.auth-section::-webkit-scrollbar-thumb,
-.auth-form::-webkit-scrollbar-thumb {
+.auth-card-body::-webkit-scrollbar {
+  width: 3.78px !important;
+  display: block !important;
+}
+
+.auth-card-body::-webkit-scrollbar-track {
   background: transparent !important;
 }
 
-.auth-card::-webkit-scrollbar-track,
-.auth-card-body::-webkit-scrollbar-track,
-.auth-section::-webkit-scrollbar-track,
-.auth-form::-webkit-scrollbar-track {
-  background: transparent !important;
+.auth-card-body::-webkit-scrollbar-thumb {
+  background: #000000 !important;
+  border-radius: 4px !important;
 }
 
 /* Border Beam Animated Glowing Border Effect */
@@ -263,14 +263,12 @@ app-galaxy {
   margin-top: 4px;
   margin-bottom: 0;
 
-  background-image: linear-gradient(
-    120deg,
-    #b5b5b5 0%,
-    #b5b5b5 35%,
-    #ffffff 50%,
-    #b5b5b5 65%,
-    #b5b5b5 100%
-  );
+  background-image: linear-gradient(120deg,
+      #b5b5b5 0%,
+      #b5b5b5 35%,
+      #ffffff 50%,
+      #b5b5b5 65%,
+      #b5b5b5 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -432,14 +430,12 @@ app-galaxy {
   align-items: center;
   padding: 1px;
   border-radius: 10px;
-  background: conic-gradient(
-    from var(--hbg-angle),
-    #1E3A8A 0%,
-    #3275F8 25%,
-    rgba(255, 255, 255, 0.3) 50%,
-    #3275F8 75%,
-    #1E3A8A 100%
-  );
+  background: conic-gradient(from var(--hbg-angle),
+      #1E3A8A 0%,
+      #3275F8 25%,
+      rgba(255, 255, 255, 0.3) 50%,
+      #3275F8 75%,
+      #1E3A8A 100%);
   animation: hbg-spin 3.5s linear infinite;
   width: 100%;
   position: relative;
@@ -1033,22 +1029,17 @@ app-galaxy {
 }
 
 /* Responsive styles for Mobile & Desktop */
+/* Responsive styles for Mobile & Desktop */
 @media (max-width: 520px) {
   .auth-card-container {
     padding: max(10px, calc(6px + var(--sat))) max(10px, calc(6px + var(--sar))) max(10px, calc(6px + var(--sab))) max(10px, calc(6px + var(--sal)));
     align-items: center;
   }
 
-  .card {
-    width: min(92vw, 360px);
-    height: auto;
-    min-height: 480px;
-    max-height: calc(100dvh - var(--sat) - var(--sab) - 16px);
-  }
-
   .auth-card {
     padding: 0;
     border-radius: 16px;
+    overflow: hidden;
   }
 
   .auth-card-body {
@@ -1083,12 +1074,6 @@ app-galaxy {
 }
 
 @media (max-height: 640px) {
-  .card {
-    height: auto;
-    min-height: 460px;
-    max-height: calc(100dvh - 16px);
-  }
-
   .auth-card-body {
     padding: 14px 12px;
   }
@@ -1109,12 +1094,14 @@ app-galaxy {
 
 /* ---------------- 3D Flip Card — Starts on Back Side ---------------- */
 .card {
-  width: 100%;
+  position: relative;
+  width: min(92vw, 360px);
   max-width: 360px;
-  height: 580px;
-  max-height: calc(100dvh - 32px);
+  height: min(580px, calc(100dvh - var(--sat) - var(--sab) - 24px));
   perspective: 1000px;
   margin: auto;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .card-inner {
@@ -1127,9 +1114,8 @@ app-galaxy {
   transform: rotateY(180deg);
 }
 
-/* Hover & Active/Touch flips to FRONT side */
+/* Hover & Focus-Within flips to FRONT side (Touch finger-swiping inside card-body won't flip card) */
 .card:hover .card-inner,
-.card:active .card-inner,
 .card:focus-within .card-inner {
   transform: rotateY(0deg);
 }
@@ -1143,10 +1129,13 @@ app-galaxy {
   height: 100%;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  overflow: hidden;
 }
 
 .card-front {
   transform: rotateY(0deg);
+  display: flex;
+  flex-direction: column;
 }
 
 .card-back {

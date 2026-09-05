@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, of } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 export interface LinkedDevice {
@@ -513,6 +514,30 @@ export class AuthService {
       phone: this.currentSession.phone,
       avatar: avatarUrl
     });
+  }
+
+  uploadProfilePhotoApi(file: File): Observable<{ success: boolean; avatarUrl?: string; error?: string }> {
+    if (!this.currentSession || !this.currentSession.id) {
+      return of({ success: false, error: 'User is not logged in' });
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const userId = this.currentSession.id;
+
+    return this.http.post<any>(`${environment.apiUrl}/users/${userId}/profile-picture`, formData).pipe(
+      map(res => {
+        const avatarUrl = res.profilePictureUrl || res.avatar || (res.data ? (res.data.avatar || res.data.profilePictureUrl) : null);
+        if (avatarUrl) {
+          this.updateProfilePicture(avatarUrl);
+          return { success: true, avatarUrl };
+        }
+        return { success: false, error: res.message || 'Upload failed' };
+      }),
+      catchError(err => {
+        console.warn('Spring Boot photo upload fallback:', err);
+        return of({ success: false, error: err.error?.message || err.message || 'Backend upload failed' });
+      })
+    );
   }
 
   removeProfilePicture(): void {

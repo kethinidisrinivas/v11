@@ -673,3 +673,18 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 }
 
+export class YourAuthComponent {
+  isFlipped = false;
+
+  onCardClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+
+    // scroll area (auth-card-body) లో టచ్ అయితే flip చేయవద్దు
+    if (target.closest('.auth-card-body')) {
+      return;
+    }
+
+    // card మీద ఎక్కడైనా (image side / header / footer) tap చేస్తే flip అవ్వాలి
+    this.isFlipped = !this.isFlipped;
+  }
+}

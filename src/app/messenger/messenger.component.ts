@@ -14,10 +14,14 @@ import { WebRtcService, SignalingMessage } from './services/webrtc.service';
 export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('shaderCanvas', { static: false }) shaderCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('profileFileInput') profileFileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('profileCameraInput') profileCameraInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('profileGalleryInput') profileGalleryInput?: ElementRef<HTMLInputElement>;
   @ViewChild('callLocalVideo') callLocalVideoRef?: ElementRef<HTMLVideoElement>;
   @ViewChild('callRemoteVideo') callRemoteVideoRef?: ElementRef<HTMLVideoElement>;
 
   lightboxImageUrl: string | null = null;
+  showPhotoSourceModal = false;
+  uploadingProfilePhoto = false;
 
   avatarPresets = [
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
@@ -386,31 +390,121 @@ export class MessengerComponent implements OnInit, AfterViewInit, OnDestroy {
     this.lightboxImageUrl = null;
   }
 
-  triggerProfileUpload(): void {
-    if (this.profileFileInput) {
-      this.profileFileInput.nativeElement.click();
+  openPhotoSourceModal(event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
     }
+    this.showPhotoSourceModal = true;
   }
 
-  onProfileFileSelected(event: Event): void {
+  closePhotoSourceModal(): void {
+    this.showPhotoSourceModal = false;
+  }
+
+  triggerCameraCapture(): void {
+    this.showPhotoSourceModal = false;
+    setTimeout(() => {
+      if (this.profileCameraInput) {
+        this.profileCameraInput.nativeElement.click();
+      } else if (this.profileFileInput) {
+        this.profileFileInput.nativeElement.click();
+      }
+    }, 50);
+  }
+
+  triggerGalleryPicker(): void {
+    this.showPhotoSourceModal = false;
+    setTimeout(() => {
+      if (this.profileGalleryInput) {
+        this.profileGalleryInput.nativeElement.click();
+      } else if (this.profileFileInput) {
+        this.profileFileInput.nativeElement.click();
+      }
+    }, 50);
+  }
+
+  triggerProfileUpload(event?: Event): void {
+    this.openPhotoSourceModal(event);
+  }
+
+  removeProfilePictureAndClose(): void {
+    this.closePhotoSourceModal();
+    this.removeProfilePicture();
+  }
+
+  onPhotoFileSelected(event: Event, source: 'camera' | 'gallery' = 'gallery'): void {
     const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-    const file = input.files[0];
-    if (!file.type.startsWith('image/')) {
-      this.showToast('Please select a valid image file');
+    if (!input.files || input.files.length === 0) {
+      this.closePhotoSourceModal();
       return;
     }
 
+    const file = input.files[0];
+    this.closePhotoSourceModal();
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const validExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!validTypes.includes(file.type.toLowerCase()) && !validExts.includes(ext)) {
+      this.showToast('Invalid file type! Please select a JPG, PNG, or WEBP image.');
+      input.value = '';
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      this.showToast('File size is too large (max 15MB). Please choose a smaller photo.');
+      input.value = '';
+      return;
+    }
+
+    // Submit to Spring Boot Backend API (Firebase Storage)
+    this.uploadingProfilePhoto = true;
+    this.authService.uploadProfilePhotoApi(file).subscribe({
+      next: (res) => {
+        this.uploadingProfilePhoto = false;
+        if (res.success && res.avatarUrl) {
+          this.showToast('Profile photo saved on server! 📸');
+        }
+      },
+      error: (err) => {
+        this.uploadingProfilePhoto = false;
+        console.warn('Backend upload notice fallback:', err);
+      }
+    });
+
+    // FileReader for instant local crop preview & responsive update
     const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      this.authService.updateProfilePicture(dataUrl);
-      this.currentUser = { ...this.currentUser, avatar: dataUrl };
-      this.messengerService.syncContactAvatars();
-      this.showToast('Profile picture updated! 📸');
+    reader.onerror = () => {
+      this.showToast('Failed to read image file. Please try another photo.');
+      input.value = '';
     };
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        this.cropLoadedImage = img;
+        this.stagedRawImageUrl = dataUrl;
+        this.resetCropAdjustments();
+        this.showCropModal = true;
+        this.updateCroppedPreview();
+      };
+      img.onerror = () => {
+        this.showToast('Unable to process photo. Please choose a valid image.');
+      };
+      img.src = dataUrl;
+    };
+
     reader.readAsDataURL(file);
     input.value = '';
+  }
+
+  onProfileFileSelected(event: Event): void {
+    this.onPhotoFileSelected(event, 'gallery');
   }
 
   removeProfilePicture(): void {

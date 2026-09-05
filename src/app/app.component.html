@@ -148,9 +148,9 @@
                 <!-- 1B. Email & Password Login Form -->
                 <form *ngIf="loginSubMode === 'email'" (ngSubmit)="onLogin()" class="auth-form">
                   <div class="input-group">
-                    <label for="login-email">Email Address or Phone</label>
+                    <label for="login-email">Email Address</label>
                     <div class="input-animated-border">
-                      <input type="text" id="login-email" name="loginEmail" placeholder="name@email.com or +1 555 0101"
+                      <input type="text" id="login-email" name="loginEmail" placeholder="Enter here..."
                         [(ngModel)]="loginEmail" required />
                     </div>
                   </div>
