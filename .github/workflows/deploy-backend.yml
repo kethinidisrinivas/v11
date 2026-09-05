@@ -1,20 +1,31 @@
 name: Deploy Backend to Cloud Run
+
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
     paths:
-      - 'backend/**' # కేవలం backend ఫోల్డర్ లో మార్పులు జరిగినప్పుడే రన్ అవుతుంది
+      - 'src/**'
+      - 'pom.xml'
+      - 'mvnw'
+      - 'mvnw.cmd'
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v1
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }} # GitHub Secrets లో దీనిని యాడ్ చేయాలి
-        
-    - name: Deploy to Cloud Run
-      run: |
-        gcloud run deploy love-backend --source ./backend --region us-central1 --allow-unauthenticated
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy love-backend \
+            --source . \
+            --region us-central1 \
+            --allow-unauthenticated
