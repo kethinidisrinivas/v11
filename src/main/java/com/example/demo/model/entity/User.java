@@ -91,6 +91,9 @@ public class User {
     public String getAvatar() { return avatar; }
     public void setAvatar(String avatar) { this.avatar = avatar; }
 
+    public String getProfilePictureUrl() { return avatar; }
+    public void setProfilePictureUrl(String profilePictureUrl) { this.avatar = profilePictureUrl; }
+
     public String getStatusText() { return statusText; }
     public void setStatusText(String statusText) { this.statusText = statusText; }
 

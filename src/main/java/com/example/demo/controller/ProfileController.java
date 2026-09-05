@@ -42,12 +42,21 @@ public class ProfileController {
     }
 
     @PostMapping("/{userId}/photo")
-    public ResponseEntity<ApiResponse<String>> uploadProfilePhoto(
+    public ResponseEntity<java.util.Map<String, Object>> uploadProfilePhoto(
             @PathVariable("userId") String userId,
             @RequestParam("file") MultipartFile file
     ) {
-        String avatarUrl = profileService.updateProfilePhoto(userId, file);
-        return ResponseEntity.ok(ApiResponse.success("Profile photo updated successfully", avatarUrl));
+        java.util.Map<String, Object> response = profileService.uploadProfilePicture(userId, file);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{userId}/profile-picture")
+    public ResponseEntity<java.util.Map<String, Object>> uploadProfilePicture(
+            @PathVariable("userId") String userId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        java.util.Map<String, Object> response = profileService.uploadProfilePicture(userId, file);
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{userId}/photo")

@@ -29,6 +29,9 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private com.example.demo.service.ProfileService profileService;
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<User>>> getAllOrSearchUsers(@RequestParam(value = "query", required = false) String query) {
         List<User> users = userService.searchUsers(query);
@@ -48,5 +51,14 @@ public class UserController {
     ) {
         User updated = userService.updateProfile(id, request);
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", updated));
+    }
+
+    @PostMapping("/{userId}/profile-picture")
+    public ResponseEntity<java.util.Map<String, Object>> uploadProfilePicture(
+            @PathVariable("userId") String userId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file
+    ) {
+        java.util.Map<String, Object> response = profileService.uploadProfilePicture(userId, file);
+        return ResponseEntity.ok(response);
     }
 }
