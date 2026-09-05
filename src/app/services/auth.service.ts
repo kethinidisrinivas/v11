@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface LinkedDevice {
   id: string;
@@ -49,6 +51,7 @@ export interface UserSession {
   songs: UserSong[];
   linkedDevices: LinkedDevice[];
   privacySettings?: PrivacySettings;
+  token?: string;
 }
 
 export interface UserRecord {
@@ -69,6 +72,7 @@ export interface UserRecord {
   providedIn: 'root'
 })
 export class AuthService {
+  private apiUrl = environment.apiUrl + '/auth';
   private currentSession: UserSession | null = null;
   private pendingOtps: Record<string, string> = {};
   private isLoggedInSubject = new BehaviorSubject<boolean>(false);
@@ -77,7 +81,7 @@ export class AuthService {
   private avatarChangedSubject = new Subject<{ userId: string; phone: string; avatar: string }>();
   public avatarChanged$: Observable<{ userId: string; phone: string; avatar: string }> = this.avatarChangedSubject.asObservable();
 
-  constructor() {
+  constructor(private http: HttpClient) {
     this.initDefaultUsers();
     const saved = localStorage.getItem('romantic_messenger_session');
     if (saved) {
@@ -268,6 +272,23 @@ export class AuthService {
       ]
     };
 
+    // Sync with Spring Boot backend REST API
+    this.http.post<any>(`${this.apiUrl}/register`, {
+      name: name.trim(),
+      phone: cleanPhone,
+      email: email ? email.trim() : undefined,
+      password: pass ? pass.trim() : 'password123'
+    }, {
+      headers: { 'X-Secret-Key': '050605' }
+    }).subscribe({
+      next: (res) => {
+        if (res && res.success && res.data) {
+          console.log('Registered user saved on Spring Boot backend:', res.data.id);
+        }
+      },
+      error: (err) => console.log('Backend registration notice:', err?.error?.message || err.message)
+    });
+
     users[phoneKey] = newUser;
     if (newUser.email) {
       users[newUser.email.toLowerCase()] = newUser;
@@ -285,6 +306,12 @@ export class AuthService {
     if (!cleanPhone || cleanPhone.length < 6) {
       return { success: false, message: 'Please enter a valid phone number.' };
     }
+
+    this.http.post<any>(`${this.apiUrl}/send-otp`, { phone: cleanPhone }).subscribe({
+      next: () => {},
+      error: () => {}
+    });
+
     const user = this.findUserByPhone(cleanPhone);
     if (!user) {
       return { success: false, message: 'Phone number not found. Please register first.' };
@@ -301,6 +328,11 @@ export class AuthService {
 
   loginWithOtp(phone: string, code: string): { success: boolean; message: string } {
     const cleanPhone = this.normalizePhone(phone);
+    this.http.post<any>(`${this.apiUrl}/verify-otp`, { phone: cleanPhone, code }).subscribe({
+      next: () => {},
+      error: () => {}
+    });
+
     const user = this.findUserByPhone(cleanPhone);
     if (!user) {
       return { success: false, message: 'Phone number not found.' };
@@ -320,6 +352,32 @@ export class AuthService {
     if (!emailOrPhone || !pass) {
       return { success: false, message: 'Credentials and password are required.' };
     }
+
+    // Call Spring Boot REST API
+    this.http.post<any>(`${this.apiUrl}/login`, {
+      emailOrPhone: emailOrPhone.trim(),
+      password: pass.trim()
+    }, {
+      headers: { 'X-Secret-Key': '050605' }
+    }).subscribe({
+      next: (res) => {
+        if (res && res.success && res.data) {
+          const userRec: UserRecord = {
+            id: res.data.id,
+            phone: res.data.phone || emailOrPhone,
+            email: res.data.email,
+            name: res.data.name,
+            username: res.data.username,
+            avatar: res.data.avatar,
+            statusText: res.data.statusText || 'Online 💖',
+            songs: [],
+            linkedDevices: []
+          };
+          this.createSession(userRec);
+        }
+      },
+      error: (err) => console.log('Backend login notice:', err?.error?.message || err.message)
+    });
 
     const users = this.getSavedUsers();
     const cleanKey = emailOrPhone.trim().replace(/\s+/g, '').toLowerCase();

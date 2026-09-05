@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
+import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -11,6 +12,8 @@ import { SidebarComponent } from './messenger/sidebar/sidebar.component';
 import { ChatWindowComponent } from './messenger/chat-window/chat-window.component';
 import { ContactInfoComponent } from './messenger/contact-info/contact-info.component';
 import { CameraModalComponent } from './messenger/camera-modal/camera-modal.component';
+
+import { JwtInterceptor } from './interceptors/jwt.interceptor';
 
 @NgModule({
   declarations: [
@@ -26,9 +29,12 @@ import { CameraModalComponent } from './messenger/camera-modal/camera-modal.comp
   imports: [
     BrowserModule,
     AppRoutingModule,
-    FormsModule
+    FormsModule,
+    HttpClientModule
   ],
-  providers: [],
+  providers: [
+    { provide: HTTP_INTERCEPTORS, useClass: JwtInterceptor, multi: true }
+  ],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

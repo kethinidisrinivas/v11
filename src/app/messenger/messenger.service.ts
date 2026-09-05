@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Contact, Message, QuotedMessagePreview, SharedMedia, User, Attachment, StatusItem, UserStatusGroup, CallLog, MessageReaction } from './messenger.model';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../environments/environment';
 import { AuthService, UserRecord } from '../services/auth.service';
 
 @Injectable({
@@ -145,7 +147,10 @@ export class MessengerService {
   private callLogsSubject = new BehaviorSubject<CallLog[]>(this.callLogs);
   public callLogs$ = this.callLogsSubject.asObservable();
 
-  constructor(private authService: AuthService) {
+  constructor(
+    private authService: AuthService,
+    private http: HttpClient
+  ) {
     this.loadContactsFromStorage();
     this.loadCallLogsFromStorage();
     this.syncCurrentUser();
@@ -340,6 +345,14 @@ export class MessengerService {
 
     this.statusGroupsMap['me'].items.unshift(newItem);
     this.statusGroupsMap['me'].lastUpdated = 'Just now';
+
+    const userId = this.authService.getCurrentUser()?.id || 'me';
+    this.http.post<any>(`${environment.apiUrl}/status?userId=${encodeURIComponent(userId)}`, {
+      type: 'text',
+      textContent: text,
+      bgColor: bgColor
+    }).subscribe({ next: () => {}, error: () => {} });
+
     return newItem;
   }
 
@@ -380,6 +393,14 @@ export class MessengerService {
 
     this.statusGroupsMap['me'].items.unshift(newItem);
     this.statusGroupsMap['me'].lastUpdated = 'Just now';
+
+    const userId = this.authService.getCurrentUser()?.id || 'me';
+    this.http.post<any>(`${environment.apiUrl}/status?userId=${encodeURIComponent(userId)}`, {
+      type: type,
+      mediaUrl: mediaUrl,
+      caption: caption
+    }).subscribe({ next: () => {}, error: () => {} });
+
     return newItem;
   }
 
@@ -387,6 +408,8 @@ export class MessengerService {
     if (this.statusGroupsMap['me']) {
       this.statusGroupsMap['me'].items = this.statusGroupsMap['me'].items.filter(i => i.id !== itemId);
     }
+    const userId = this.authService.getCurrentUser()?.id || 'me';
+    this.http.delete<any>(`${environment.apiUrl}/status/${itemId}?userId=${encodeURIComponent(userId)}`).subscribe({ next: () => {}, error: () => {} });
   }
 
   markStatusItemSeen(contactId: string, itemId: string): void {
@@ -398,6 +421,7 @@ export class MessengerService {
       }
       group.hasUnseen = group.items.some(i => !i.seen);
     }
+    this.http.patch<any>(`${environment.apiUrl}/status/${itemId}/seen`, {}).subscribe({ next: () => {}, error: () => {} });
   }
 
   getStatusGroups(): UserStatusGroup[] {
@@ -439,6 +463,8 @@ export class MessengerService {
 
   clearCallLogs(): void {
     this.callLogs = [];
+    const userId = this.authService.getCurrentUser()?.id || 'me';
+    this.http.delete<any>(`${environment.apiUrl}/calls?userId=${encodeURIComponent(userId)}`).subscribe({ next: () => {}, error: () => {} });
   }
 
   startCall(mode: 'audio' | 'video', contactId: string, contactName: string, contactAvatar: string) {
@@ -455,6 +481,16 @@ export class MessengerService {
       formattedDuration: '00:00'
     };
     this.callLogs.unshift(newLog);
+
+    const userId = this.authService.getCurrentUser()?.id || 'me';
+    this.http.post<any>(`${environment.apiUrl}/calls?userId=${encodeURIComponent(userId)}`, {
+      contactId,
+      contactName,
+      contactAvatar,
+      type: 'outgoing',
+      mode,
+      duration: 0
+    }).subscribe({ next: () => {}, error: () => {} });
 
     return {
       type: mode,
@@ -620,6 +656,10 @@ export class MessengerService {
     return raw.filter(m => !m.deletedForUsers || !m.deletedForUsers.includes('me'));
   }
 
+  getMessagesForContact(contactId: string): Message[] {
+    return this.getMessages(contactId);
+  }
+
   getTotalUnreadCount(): number {
     return this.contacts.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   }
@@ -699,7 +739,7 @@ export class MessengerService {
     }
   }
 
-  sendMessage(contactId: string, text: string, attachment?: Attachment, replyTo?: QuotedMessagePreview): void {
+  sendMessage(contactId: string, text: string, attachment?: Attachment, replyTo?: QuotedMessagePreview): Message {
     if (!this.messagesMap[contactId]) {
       this.messagesMap[contactId] = [];
     }
@@ -725,6 +765,20 @@ export class MessengerService {
     this.saveMessagesToStorage();
     this.notifyMessagesUpdated(contactId);
 
+    const currentUserId = this.authService.getCurrentUser()?.id || 'me';
+    this.http.post<any>(`${environment.apiUrl}/messages?senderId=${encodeURIComponent(currentUserId)}`, {
+      contactId: contactId,
+      text: text,
+      type: attachment ? attachment.type : 'TEXT',
+      mediaUrl: attachment ? attachment.url : null,
+      fileName: attachment ? attachment.name : null,
+      fileSize: attachment ? attachment.size : null,
+      replyToMessageId: replyTo ? replyTo.id : null
+    }).subscribe({
+      next: () => {},
+      error: () => {}
+    });
+
     const contact = this.contacts.find(c => c.id === contactId);
     if (contact && contact.isOnline) {
       // Simulate receiver opening the chat & viewing the message after short delay
@@ -746,6 +800,8 @@ export class MessengerService {
         this.appendSimulatedReply(contact);
       }, 4500);
     }
+
+    return newMsg;
   }
 
   sendMessageWithUpload(contactId: string, text: string, attachment: Attachment, replyTo?: QuotedMessagePreview): Message {
