@@ -53,7 +53,7 @@ public class FirebaseStorageService {
             try (FileOutputStream fos = new FileOutputStream(targetFile)) {
                 fos.write(file.getBytes());
             }
-            return "http://localhost:8080/uploads/" + fileName.replace("\\", "/");
+            return "https://v11-laa0.onrender.com/uploads/" + fileName.replace("\\", "/");
         } catch (IOException e) {
             throw new RuntimeException("Failed to store file: " + e.getMessage(), e);
         }
