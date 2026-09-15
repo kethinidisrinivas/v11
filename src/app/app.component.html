@@ -48,15 +48,15 @@
                 <p class="subtitle">Text someone who makes your heart smile</p>
               </header>
 
-              <!-- Error, Success & Demo OTP Notification Banners -->
+              <!-- Invisible reCAPTCHA container for Firebase Phone Authentication -->
+              <div id="recaptcha-container"></div>
+
+              <!-- Error & Success Notification Banners -->
               <div class="alert alert-error" *ngIf="errorMessage">
                 <span>⚠️</span> {{ errorMessage }}
               </div>
               <div class="alert alert-success" *ngIf="successMessage">
                 <span>💖</span> {{ successMessage }}
-              </div>
-              <div class="alert alert-info" *ngIf="demoOtpAlert">
-                <span>🔑</span> Demo OTP Code: <strong>{{ demoOtpAlert }}</strong>
               </div>
 
               <!-- LOGIN MODE -->
@@ -112,15 +112,15 @@
                     </div>
                   </div>
 
-                  <div class="input-group" *ngIf="demoOtpAlert">
+                  <div class="input-group" *ngIf="loginOtpSent">
                     <label for="login-otp">6-Digit Verification OTP</label>
                     <div class="input-animated-border">
-                      <input type="text" id="login-otp" name="loginOtp" placeholder="Enter 123456"
+                      <input type="text" id="login-otp" name="loginOtp" placeholder="Enter 6-digit OTP"
                         [(ngModel)]="loginOtp" maxlength="6" required />
                     </div>
                   </div>
 
-                  <div class="otp-actions-row" *ngIf="demoOtpAlert">
+                  <div class="otp-actions-row" *ngIf="loginOtpSent">
                     <button type="button" class="btn-resend-otp" (click)="resendLoginOtp()"
                       [disabled]="resendCountdown > 0">
                       <span *ngIf="resendCountdown > 0">Resend OTP ({{ resendCountdown }}s)</span>
@@ -279,9 +279,17 @@
                   <div class="input-group">
                     <label for="reg-otp">Enter 6-Digit OTP Code</label>
                     <div class="input-animated-border">
-                      <input type="text" id="reg-otp" name="registerOtp" placeholder="123456" [(ngModel)]="registerOtp"
+                      <input type="text" id="reg-otp" name="registerOtp" placeholder="Enter 6-digit OTP" [(ngModel)]="registerOtp"
                         maxlength="6" required />
                     </div>
+                  </div>
+
+                  <div class="otp-actions-row">
+                    <button type="button" class="btn-resend-otp" (click)="resendRegisterOtp()"
+                      [disabled]="resendCountdown > 0">
+                      <span *ngIf="resendCountdown > 0">Resend OTP ({{ resendCountdown }}s)</span>
+                      <span *ngIf="resendCountdown === 0">🔄 Resend OTP</span>
+                    </button>
                   </div>
 
                   <div class="input-group">

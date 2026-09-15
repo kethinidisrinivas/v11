@@ -4,6 +4,16 @@ import { BehaviorSubject, Observable, Subject, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getAuth,
+  Auth,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  ConfirmationResult,
+  UserCredential
+} from 'firebase/auth';
+
 export interface LinkedDevice {
   id: string;
   name: string;
@@ -75,12 +85,17 @@ export interface UserRecord {
 export class AuthService {
   private apiUrl = environment.apiUrl + '/auth';
   private currentSession: UserSession | null = null;
-  private pendingOtps: Record<string, string> = {};
   private isLoggedInSubject = new BehaviorSubject<boolean>(false);
   public isLoggedIn$: Observable<boolean> = this.isLoggedInSubject.asObservable();
 
   private avatarChangedSubject = new Subject<{ userId: string; phone: string; avatar: string }>();
   public avatarChanged$: Observable<{ userId: string; phone: string; avatar: string }> = this.avatarChangedSubject.asObservable();
+
+  // Firebase Authentication setup
+  private firebaseApp = getApps().length ? getApp() : initializeApp(environment.firebase);
+  private firebaseAuth: Auth = getAuth(this.firebaseApp);
+  private recaptchaVerifier: RecaptchaVerifier | null = null;
+  private confirmationResult: ConfirmationResult | null = null;
 
   constructor(private http: HttpClient) {
     this.initDefaultUsers();
@@ -95,11 +110,21 @@ export class AuthService {
     this.isLoggedInSubject.next(this.currentSession !== null);
   }
 
-  private normalizePhone(phone: string): string {
+  formatPhoneE164(phone: string, defaultCountryDialCode: string = '+91'): string {
     if (!phone) return '';
-    const trimmed = phone.trim();
-    if (trimmed.startsWith('+')) return trimmed;
-    return `+91 ${trimmed}`;
+    let trimmed = phone.trim();
+    if (!trimmed.startsWith('+')) {
+      const cleanDigits = trimmed.replace(/\D/g, '');
+      const defaultDigits = defaultCountryDialCode.replace('+', '');
+      if (cleanDigits.startsWith(defaultDigits)) {
+        trimmed = '+' + cleanDigits;
+      } else {
+        trimmed = `${defaultCountryDialCode}${cleanDigits}`;
+      }
+    } else {
+      trimmed = '+' + trimmed.substring(1).replace(/\D/g, '');
+    }
+    return trimmed;
   }
 
   private initDefaultUsers(): void {
@@ -195,28 +220,98 @@ export class AuthService {
     }
   }
 
-  // --- OTP Operations ---
-  sendRegistrationOtp(phone: string): { success: boolean; message: string; otp?: string } {
-    const cleanPhone = this.normalizePhone(phone);
-    if (!cleanPhone || cleanPhone.length < 6) {
-      return { success: false, message: 'Please enter a valid phone number.' };
+  // --- Firebase Phone Auth Setup & Helpers ---
+  initRecaptcha(containerId: string = 'recaptcha-container'): RecaptchaVerifier {
+    if (this.recaptchaVerifier) {
+      try {
+        this.recaptchaVerifier.clear();
+      } catch (e) {}
+      this.recaptchaVerifier = null;
     }
-    const otp = '123456'; // Simulated standard test OTP
-    this.pendingOtps[cleanPhone] = otp;
-    return {
-      success: true,
-      message: `OTP sent successfully to ${cleanPhone}. (Demo OTP: ${otp})`,
-      otp
-    };
+
+    this.recaptchaVerifier = new RecaptchaVerifier(this.firebaseAuth, containerId, {
+      size: 'invisible',
+      callback: () => {},
+      'expired-callback': () => {}
+    });
+
+    return this.recaptchaVerifier;
   }
 
-  verifyRegistrationOtp(phone: string, code: string): { success: boolean; message: string } {
-    const cleanPhone = this.normalizePhone(phone);
-    if (!code || code.trim() !== (this.pendingOtps[cleanPhone] || '123456')) {
-      return { success: false, message: 'Invalid OTP code. Please enter 123456.' };
+  resetRecaptcha(): void {
+    if (this.recaptchaVerifier) {
+      try {
+        this.recaptchaVerifier.clear();
+      } catch (e) {}
+      this.recaptchaVerifier = null;
     }
-    delete this.pendingOtps[cleanPhone];
-    return { success: true, message: 'Phone number verified! Now please set your email and password.' };
+  }
+
+  private mapFirebaseAuthError(error: any): string {
+    if (!error) return 'Authentication error occurred.';
+    const code = error.code || '';
+    switch (code) {
+      case 'auth/invalid-verification-code':
+        return 'Invalid OTP code. Please check the 6-digit code received on your phone and try again.';
+      case 'auth/code-expired':
+        return 'The OTP code has expired. Please click Resend OTP to receive a new code.';
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Firebase rate limit reached for SMS. Please try again later.';
+      case 'auth/invalid-phone-number':
+        return 'Invalid phone number format. Please check the phone number and country code.';
+      case 'auth/quota-exceeded':
+        return 'SMS quota exceeded. Please try again later.';
+      case 'auth/captcha-check-failed':
+        return 'reCAPTCHA verification failed. Please refresh and try again.';
+      default:
+        return error.message || 'OTP verification failed. Please try again.';
+    }
+  }
+
+  // --- Real Firebase OTP Operations ---
+  async sendRegistrationOtp(phone: string, containerId: string = 'recaptcha-container'): Promise<{ success: boolean; message: string; formattedPhone?: string }> {
+    const cleanPhone = this.formatPhoneE164(phone);
+    if (!cleanPhone || cleanPhone.length < 8) {
+      return { success: false, message: 'Please enter a valid phone number.' };
+    }
+
+    try {
+      const verifier = this.initRecaptcha(containerId);
+      this.confirmationResult = await signInWithPhoneNumber(this.firebaseAuth, cleanPhone, verifier);
+      return {
+        success: true,
+        message: `OTP sent successfully to ${cleanPhone}`,
+        formattedPhone: cleanPhone
+      };
+    } catch (error: any) {
+      console.error('Firebase send registration OTP error:', error);
+      this.resetRecaptcha();
+      return {
+        success: false,
+        message: this.mapFirebaseAuthError(error)
+      };
+    }
+  }
+
+  async verifyRegistrationOtp(phone: string, code: string): Promise<{ success: boolean; message: string }> {
+    if (!code || code.trim().length !== 6) {
+      return { success: false, message: 'Please enter the 6-digit OTP code received on your phone.' };
+    }
+
+    if (!this.confirmationResult) {
+      return { success: false, message: 'OTP session expired or not initialized. Please click Resend OTP.' };
+    }
+
+    try {
+      await this.confirmationResult.confirm(code.trim());
+      return { success: true, message: 'Phone number verified successfully!' };
+    } catch (error: any) {
+      console.error('Firebase verify registration OTP error:', error);
+      return {
+        success: false,
+        message: this.mapFirebaseAuthError(error)
+      };
+    }
   }
 
   completePhoneRegistration(
@@ -229,7 +324,7 @@ export class AuthService {
       return { success: false, message: 'Phone number and Name are required.' };
     }
 
-    const cleanPhone = phone.trim();
+    const cleanPhone = this.formatPhoneE164(phone);
     const users = this.getSavedUsers();
     const phoneKey = cleanPhone.replace(/\s+/g, '').toLowerCase();
 
@@ -301,51 +396,87 @@ export class AuthService {
     return { success: true, message: 'Registration complete! Welcome to Romantic Messenger.' };
   }
 
-  // --- OTP Login ---
-  sendLoginOtp(phone: string): { success: boolean; message: string; otp?: string } {
-    const cleanPhone = this.normalizePhone(phone);
-    if (!cleanPhone || cleanPhone.length < 6) {
+  // --- Real Firebase OTP Login ---
+  async sendLoginOtp(phone: string, containerId: string = 'recaptcha-container'): Promise<{ success: boolean; message: string; formattedPhone?: string }> {
+    const cleanPhone = this.formatPhoneE164(phone);
+    if (!cleanPhone || cleanPhone.length < 8) {
       return { success: false, message: 'Please enter a valid phone number.' };
     }
 
-    this.http.post<any>(`${this.apiUrl}/send-otp`, { phone: cleanPhone }).subscribe({
-      next: () => {},
-      error: () => {}
-    });
+    try {
+      const verifier = this.initRecaptcha(containerId);
+      this.confirmationResult = await signInWithPhoneNumber(this.firebaseAuth, cleanPhone, verifier);
 
-    const user = this.findUserByPhone(cleanPhone);
-    if (!user) {
-      return { success: false, message: 'Phone number not found. Please register first.' };
+      this.http.post<any>(`${this.apiUrl}/send-otp`, { phone: cleanPhone }).subscribe({
+        next: () => {},
+        error: () => {}
+      });
+
+      return {
+        success: true,
+        message: `OTP sent successfully to ${cleanPhone}`,
+        formattedPhone: cleanPhone
+      };
+    } catch (error: any) {
+      console.error('Firebase send login OTP error:', error);
+      this.resetRecaptcha();
+      return {
+        success: false,
+        message: this.mapFirebaseAuthError(error)
+      };
     }
-
-    const otp = '123456';
-    this.pendingOtps[cleanPhone] = otp;
-    return {
-      success: true,
-      message: `OTP sent to ${phone.trim()}. (Demo OTP: ${otp})`,
-      otp
-    };
   }
 
-  loginWithOtp(phone: string, code: string): { success: boolean; message: string } {
-    const cleanPhone = this.normalizePhone(phone);
-    this.http.post<any>(`${this.apiUrl}/verify-otp`, { phone: cleanPhone, code }).subscribe({
-      next: () => {},
-      error: () => {}
-    });
-
-    const user = this.findUserByPhone(cleanPhone);
-    if (!user) {
-      return { success: false, message: 'Phone number not found.' };
+  async loginWithOtp(phone: string, code: string): Promise<{ success: boolean; message: string }> {
+    const cleanPhone = this.formatPhoneE164(phone);
+    if (!code || code.trim().length !== 6) {
+      return { success: false, message: 'Please enter the 6-digit OTP code.' };
     }
 
-    if (!code || code.trim() !== (this.pendingOtps[cleanPhone] || '123456')) {
-      return { success: false, message: 'Invalid OTP code. Use 123456 for demo.' };
+    if (!this.confirmationResult) {
+      return { success: false, message: 'OTP session expired or not initialized. Please click Resend OTP.' };
     }
 
-    delete this.pendingOtps[cleanPhone];
-    this.createSession(user);
-    return { success: true, message: 'Login successful!' };
+    try {
+      const userCredential: UserCredential = await this.confirmationResult.confirm(code.trim());
+      const firebaseUser = userCredential.user;
+      const idToken = await firebaseUser.getIdToken();
+
+      let user = this.findUserByPhone(cleanPhone);
+      if (!user) {
+        user = {
+          id: firebaseUser.uid,
+          phone: cleanPhone,
+          name: firebaseUser.phoneNumber || cleanPhone,
+          avatar: this.getDefaultAvatar(cleanPhone),
+          statusText: 'Online ✨',
+          songs: [],
+          linkedDevices: []
+        };
+      } else {
+        user.id = user.id || firebaseUser.uid;
+      }
+
+      this.http.post<any>(`${this.apiUrl}/verify-otp`, {
+        phone: cleanPhone,
+        firebaseUid: firebaseUser.uid,
+        idToken
+      }, {
+        headers: { 'X-Secret-Key': '050605' }
+      }).subscribe({
+        next: () => {},
+        error: (err) => console.log('Backend verify OTP notice:', err?.error?.message || err.message)
+      });
+
+      this.createSession(user, idToken);
+      return { success: true, message: 'Login successful!' };
+    } catch (error: any) {
+      console.error('Firebase login verify OTP error:', error);
+      return {
+        success: false,
+        message: this.mapFirebaseAuthError(error)
+      };
+    }
   }
 
   // --- Standard Email Login ---
@@ -635,7 +766,7 @@ export class AuthService {
     return this.currentSession !== null;
   }
 
-  private createSession(user: UserRecord): void {
+  private createSession(user: UserRecord, token?: string): void {
     this.currentSession = {
       id: user.id,
       phone: user.phone,
@@ -646,6 +777,7 @@ export class AuthService {
       statusText: user.statusText || 'Online 💖',
       songs: user.songs || [],
       privacySettings: user.privacySettings || { ...DEFAULT_PRIVACY_SETTINGS },
+      token: token || user.id,
       linkedDevices: user.linkedDevices || [
         {
           id: 'dev_1',

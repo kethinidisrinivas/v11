@@ -187,10 +187,11 @@ export class AppComponent implements OnInit, OnDestroy {
   loginCountrySearch = '';
   registerCountrySearch = '';
 
-  // Timer & Demo OTP State
+  // Timer & Real OTP State
   resendCountdown = 0;
   private resendTimerInterval: any;
-  demoOtpAlert = '';
+  loginOtpSent = false;
+  registerOtpSent = false;
 
   // Messages
   errorMessage = '';
@@ -332,29 +333,32 @@ export class AppComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  // --- OTP Login Handlers ---
-  sendLoginOtp(): void {
+  // --- Real Firebase OTP Login Handlers ---
+  async sendLoginOtp(): Promise<void> {
     this.clearMessages();
     if (!this.validateSecretCode(this.loginSecretCode)) return;
-    const result = this.authService.sendLoginOtp(this.loginPhone);
+    const result = await this.authService.sendLoginOtp(this.loginPhone);
     if (result.success) {
       this.successMessage = result.message;
-      this.demoOtpAlert = result.otp || '123456';
+      this.loginOtpSent = true;
+      if (result.formattedPhone) {
+        this.loginPhone = result.formattedPhone;
+      }
       this.startResendTimer();
     } else {
       this.errorMessage = result.message;
     }
   }
 
-  resendLoginOtp(): void {
+  async resendLoginOtp(): Promise<void> {
     if (this.resendCountdown > 0) return;
-    this.sendLoginOtp();
+    await this.sendLoginOtp();
   }
 
-  onLoginWithOtp(): void {
+  async onLoginWithOtp(): Promise<void> {
     this.clearMessages();
     if (!this.validateSecretCode(this.loginSecretCode)) return;
-    const result = this.authService.loginWithOtp(this.loginPhone, this.loginOtp);
+    const result = await this.authService.loginWithOtp(this.loginPhone, this.loginOtp);
     if (result.success) {
       this.isLoggedIn = true;
       this.clearFormFields();
@@ -383,24 +387,39 @@ export class AppComponent implements OnInit, OnDestroy {
     this.resendCountdown = 0;
   }
 
-  // --- Registration Multi-step Handlers ---
-  sendRegisterOtp(): void {
+  // --- Real Firebase Registration Multi-step Handlers ---
+  async sendRegisterOtp(): Promise<void> {
     this.clearMessages();
     if (!this.validateSecretCode(this.registerSecretCode)) return;
-    const result = this.authService.sendRegistrationOtp(this.registerPhone);
+    const result = await this.authService.sendRegistrationOtp(this.registerPhone);
     if (result.success) {
       this.successMessage = result.message;
-      this.demoOtpAlert = result.otp || '123456';
+      this.registerOtpSent = true;
+      if (result.formattedPhone) {
+        this.registerPhone = result.formattedPhone;
+      }
       this.registerStep = 2;
+      this.startResendTimer();
     } else {
       this.errorMessage = result.message;
     }
   }
 
-  verifyRegisterOtp(): void {
+  async resendRegisterOtp(): Promise<void> {
+    if (this.resendCountdown > 0) return;
+    const result = await this.authService.sendRegistrationOtp(this.registerPhone);
+    if (result.success) {
+      this.successMessage = result.message;
+      this.startResendTimer();
+    } else {
+      this.errorMessage = result.message;
+    }
+  }
+
+  async verifyRegisterOtp(): Promise<void> {
     this.clearMessages();
     if (!this.validateSecretCode(this.registerSecretCode)) return;
-    const result = this.authService.verifyRegistrationOtp(this.registerPhone, this.registerOtp);
+    const result = await this.authService.verifyRegistrationOtp(this.registerPhone, this.registerOtp);
     if (result.success) {
       this.successMessage = result.message;
       this.registerStep = 3;
@@ -453,7 +472,6 @@ export class AppComponent implements OnInit, OnDestroy {
   private clearMessages(): void {
     this.errorMessage = '';
     this.successMessage = '';
-    this.demoOtpAlert = '';
     this.secretCodeError = '';
   }
 
@@ -468,6 +486,8 @@ export class AppComponent implements OnInit, OnDestroy {
     this.registerSecretCode = '';
     this.secretCodeError = '';
     this.registerStep = 1;
+    this.loginOtpSent = false;
+    this.registerOtpSent = false;
     this.clearResendTimer();
   }
 
