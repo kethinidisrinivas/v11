@@ -6,20 +6,22 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.cloud.FirestoreClient;
 import com.google.firebase.database.FirebaseDatabase;
+
 import jakarta.annotation.PostConstruct;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 @Configuration
 public class FirebaseConfig {
 
-    @Value("${firebase.config-path:firebase-service-account.json}")
-    private String configPath;
+    @Value("${firebase.service-account-json:}")
+    private String serviceAccountJson;
 
     @Value("${firebase.database-url:https://love-e9901-default-rtdb.firebaseio.com/}")
     private String databaseUrl;
@@ -29,43 +31,55 @@ public class FirebaseConfig {
 
     @PostConstruct
     public void initialize() {
-        try {
-            ClassPathResource resource = new ClassPathResource(configPath);
-            if (resource.exists()) {
-                InputStream serviceAccount = resource.getInputStream();
-                FirebaseOptions options = FirebaseOptions.builder()
-                        .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                        .setDatabaseUrl(databaseUrl)
-                        .setStorageBucket(storageBucket)
-                        .build();
 
-                if (FirebaseApp.getApps().isEmpty()) {
-                    FirebaseApp.initializeApp(options);
-                    System.out.println("Firebase Admin SDK is successfully connected!");
-                }
-            } else {
-                System.out.println("No " + configPath + " found in classpath.");
+        try {
+
+            if (serviceAccountJson == null || serviceAccountJson.isBlank()) {
+                System.out.println("Firebase service account JSON is not configured.");
+                return;
             }
+
+            ByteArrayInputStream serviceAccount =
+                    new ByteArrayInputStream(
+                            serviceAccountJson.getBytes(StandardCharsets.UTF_8)
+                    );
+
+            FirebaseOptions options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .setDatabaseUrl(databaseUrl)
+                    .setStorageBucket(storageBucket)
+                    .build();
+
+            if (FirebaseApp.getApps().isEmpty()) {
+
+                FirebaseApp.initializeApp(options);
+
+                System.out.println("Firebase Admin SDK is successfully connected!");
+            }
+
         } catch (IOException e) {
+
             System.err.println("Firebase Error: " + e.getMessage());
         }
     }
 
-    // 1. Cloud Firestore Bean
     @Bean
     public Firestore getFirestore() {
+
         if (FirebaseApp.getApps().isEmpty()) {
             return null;
         }
+
         return FirestoreClient.getFirestore();
     }
 
-    // 2. Realtime Database Bean
     @Bean
     public FirebaseDatabase getRealtimeDatabase() {
+
         if (FirebaseApp.getApps().isEmpty()) {
             return null;
         }
+
         return FirebaseDatabase.getInstance();
     }
 }
