@@ -17,131 +17,16 @@ export class MessengerService {
     isOnline: true
   };
 
-  private contacts: Contact[] = [
-    {
-      id: 'sophia',
-      name: 'Sophia Miller',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-      statusText: 'Living in the moment 🌸',
-      isOnline: true,
-      unreadCount: 2,
-      isFavorite: true,
-      phone: '+1 555 0102',
-      about: 'Design enthusiast & digital nomad. Always up for stargazing sessions.'
-    },
-    {
-      id: 'emma',
-      name: 'Emma Vance',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-      statusText: 'Lost in audiobooks & tea ☕',
-      isOnline: true,
-      unreadCount: 1,
-      isFavorite: true,
-      phone: '+1 555 0101',
-      about: 'UI/UX Designer dreaming in pastel violet gradients.'
-    },
-    {
-      id: 'alex',
-      name: 'Alex Rivers',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-      statusText: 'Coding under midnight sky 🚀',
-      isOnline: true,
-      unreadCount: 0,
-      isFavorite: true,
-      phone: '+1 555 0103',
-      about: 'Software engineer & tech explorer. Coffee first, code second.'
-    },
-    {
-      id: 'lucas',
-      name: 'Lucas Thorne',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
-      statusText: 'BRB - Mountain hiking 🏔️',
-      isOnline: false,
-      lastSeen: '12m ago',
-      unreadCount: 0,
-      isFavorite: false,
-      phone: '+1 555 0104',
-      about: 'Adventure photographer & nature seeker.'
-    },
-    {
-      id: 'elena',
-      name: 'Elena Rostova',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
-      statusText: 'Creative Director at Studio 🌌',
-      isOnline: true,
-      unreadCount: 0,
-      isFavorite: true,
-      phone: '+1 555 0105',
-      about: 'Visual artist passionate about neon glassmorphism.'
-    }
-  ];
+  private contacts: Contact[] = [];
 
   // Status Groups Data (with 24h expiration check)
   private statusGroupsMap: Record<string, UserStatusGroup> = {};
 
-  private callLogs: CallLog[] = [
-    {
-      id: 'call_1',
-      contactId: 'sophia',
-      contactName: 'Sophia Miller',
-      contactAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-      type: 'incoming',
-      mode: 'video',
-      timestamp: new Date(Date.now() - 3600000 * 2.5),
-      timeStr: 'Today, 04:15 PM',
-      duration: 342,
-      formattedDuration: '05:42'
-    },
-    {
-      id: 'call_2',
-      contactId: 'emma',
-      contactName: 'Emma Vance',
-      contactAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-      type: 'outgoing',
-      mode: 'audio',
-      timestamp: new Date(Date.now() - 3600000 * 18),
-      timeStr: 'Yesterday, 09:30 PM',
-      duration: 780,
-      formattedDuration: '13:00'
-    }
-  ];
+  private callLogs: CallLog[] = [];
 
-  private messagesMap: Record<string, Message[]> = {
-    sophia: [
-      {
-        id: 'msg_s1',
-        senderId: 'sophia',
-        senderName: 'Sophia Miller',
-        text: 'Thinking about our weekend trip. The cabin looks absolutely perfect. ✨',
-        timestamp: new Date(Date.now() - 3600000 * 2),
-        timeStr: '10:42 AM',
-        isRead: true
-      },
-      {
-        id: 'msg_s2',
-        senderId: 'me',
-        senderName: 'Me',
-        text: 'I booked the balcony room for us! 🌲✨',
-        timestamp: new Date(Date.now() - 3600000 * 1.5),
-        timeStr: '10:50 AM',
-        isRead: true,
-        status: 'seen'
-      }
-    ],
-    emma: [
-      {
-        id: 'msg_e1',
-        senderId: 'emma',
-        senderName: 'Emma Vance',
-        text: 'Loved the soft violet glow palette you picked for the main dashboard! 💜',
-        timestamp: new Date(Date.now() - 3600000 * 1.2),
-        timeStr: '10:10 AM',
-        isRead: false
-      }
-    ]
-  };
+  private messagesMap: Record<string, Message[]> = {};
 
-  private selectedContactSubject = new BehaviorSubject<Contact | null>(this.contacts[0]);
+  private selectedContactSubject = new BehaviorSubject<Contact | null>(null);
   private typingContactSubject = new BehaviorSubject<{ contactId: string; userId: string; name: string; updatedAt: number } | null>(null);
   private messagesSubject = new BehaviorSubject<{ contactId: string; messages: Message[] } | null>(null);
   private callLogsSubject = new BehaviorSubject<CallLog[]>(this.callLogs);
@@ -187,98 +72,7 @@ export class MessengerService {
   }
 
   private initDefaultStatuses(): void {
-    const now = Date.now();
-
-    // My Statuses
-    this.statusGroupsMap['me'] = {
-      contactId: 'me',
-      contactName: this.currentUser.name,
-      contactAvatar: this.currentUser.avatar,
-      isMine: true,
-      hasUnseen: false,
-      lastUpdated: 'Today, 08:30 AM',
-      items: [
-        {
-          id: 'st_my_1',
-          type: 'text',
-          textContent: 'Building the future of messaging in Sanctuary 🌌✨',
-          bgColor: 'linear-gradient(135deg, #10b981, #059669)',
-          timestamp: now - 3600000 * 3,
-          timeStr: '3h ago',
-          seen: true,
-          viewsCount: 14
-        }
-      ]
-    };
-
-    // Sophia's Statuses (Unseen)
-    this.statusGroupsMap['sophia'] = {
-      contactId: 'sophia',
-      contactName: 'Sophia Miller',
-      contactAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-      hasUnseen: true,
-      lastUpdated: 'Today, 10:15 AM',
-      items: [
-        {
-          id: 'st_sophia_1',
-          type: 'image',
-          mediaUrl: 'https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=600&h=800&fit=crop',
-          caption: 'Stargazing at the mountain cabin balcony ✨🌲',
-          timestamp: now - 3600000 * 1.5,
-          timeStr: 'Today, 10:15 AM',
-          seen: false
-        },
-        {
-          id: 'st_sophia_2',
-          type: 'text',
-          textContent: 'Coffee first, code second ☕💜',
-          bgColor: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-          timestamp: now - 3600000 * 1,
-          timeStr: '1h ago',
-          seen: false
-        }
-      ]
-    };
-
-    // Emma's Statuses (Unseen)
-    this.statusGroupsMap['emma'] = {
-      contactId: 'emma',
-      contactName: 'Emma Vance',
-      contactAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-      hasUnseen: true,
-      lastUpdated: 'Today, 09:00 AM',
-      items: [
-        {
-          id: 'st_emma_1',
-          type: 'image',
-          mediaUrl: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=600&h=800&fit=crop',
-          caption: 'Quiet morning vibes ☕🌸',
-          timestamp: now - 3600000 * 2.5,
-          timeStr: 'Today, 09:00 AM',
-          seen: false
-        }
-      ]
-    };
-
-    // Elena's Statuses (Viewed)
-    this.statusGroupsMap['elena'] = {
-      contactId: 'elena',
-      contactName: 'Elena Rostova',
-      contactAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
-      hasUnseen: false,
-      lastUpdated: 'Yesterday, 08:45 PM',
-      items: [
-        {
-          id: 'st_elena_1',
-          type: 'image',
-          mediaUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=800&fit=crop',
-          caption: 'Sunset colors over the horizon 🌅',
-          timestamp: now - 3600000 * 15,
-          timeStr: 'Yesterday, 08:45 PM',
-          seen: true
-        }
-      ]
-    };
+    // No default statuses initialized in clean state
   }
 
   // Purge expired statuses older than 24h (86,400,000 ms)
@@ -917,39 +711,7 @@ export class MessengerService {
   }
 
   private appendSimulatedReply(contact: Contact): void {
-    const replies = [
-      "That sounds wonderful! I am so looking forward to it. ✨",
-      "Absolutely! Let's make sure we catch that view together. 🌌",
-      "Got it! I will check the details right away. 💜",
-      "That is so thoughtful of you. Thanks for sharing! 😊"
-    ];
-
-    const randomText = replies[Math.floor(Math.random() * replies.length)];
-    const now = new Date();
-
-    const isCurrentChatOpen = this.selectedContactSubject.value?.id === contact.id;
-
-    const replyMsg: Message = {
-      id: 'msg_reply_' + Date.now(),
-      senderId: contact.id,
-      senderName: contact.name,
-      text: randomText,
-      timestamp: now,
-      timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isRead: isCurrentChatOpen
-    };
-
-    if (!this.messagesMap[contact.id]) {
-      this.messagesMap[contact.id] = [];
-    }
-    this.messagesMap[contact.id].push(replyMsg);
-
-    if (!isCurrentChatOpen) {
-      contact.unreadCount = (contact.unreadCount || 0) + 1;
-    }
-
-    this.saveMessagesToStorage();
-    this.notifyMessagesUpdated(contact.id);
+    // Disabled simulated auto-replies for real user interactions
   }
 
   addContactFromRegisteredUser(user: UserRecord): Contact {

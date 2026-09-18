@@ -11,7 +11,10 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   ConfirmationResult,
-  UserCredential
+  UserCredential,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification
 } from 'firebase/auth';
 
 export interface LinkedDevice {
@@ -63,6 +66,8 @@ export interface UserSession {
   linkedDevices: LinkedDevice[];
   privacySettings?: PrivacySettings;
   token?: string;
+  authType?: 'phone' | 'email';
+  createdAt?: string;
 }
 
 export interface UserRecord {
@@ -77,6 +82,8 @@ export interface UserRecord {
   songs: UserSong[];
   linkedDevices: LinkedDevice[];
   privacySettings?: PrivacySettings;
+  authType?: 'phone' | 'email';
+  createdAt?: string;
 }
 
 @Injectable({
@@ -128,96 +135,7 @@ export class AuthService {
   }
 
   private initDefaultUsers(): void {
-    const users = this.getSavedUsers();
-    let updated = false;
-
-    const defaultUsers: UserRecord[] = [
-      {
-        id: 'emma',
-        phone: '+91 98765 0101',
-        email: 'emma@love.com',
-        name: 'Emma 💖',
-        pass: 'password123',
-        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-        statusText: 'Under the same starry sky... ✨',
-        songs: [
-          { id: 's1', title: 'Starry Night Serenade', artist: 'Luna Dream', duration: '03:45' },
-          { id: 's2', title: 'Whispers in the Wind', artist: 'Acoustic Hearts', duration: '04:12' }
-        ],
-        linkedDevices: [
-          {
-            id: 'dev-1',
-            name: 'Windows Desktop PC',
-            platform: 'Windows 11',
-            browser: 'Chrome 122.0',
-            location: 'Mumbai, India',
-            lastActive: 'Active Now',
-            isCurrent: true,
-            loginTime: 'Today at 09:30 AM'
-          },
-          {
-            id: 'dev-2',
-            name: 'iPhone 15 Pro',
-            platform: 'iOS 17.3',
-            browser: 'Safari Mobile',
-            location: 'Mumbai, India',
-            lastActive: '2 hours ago',
-            isCurrent: false,
-            loginTime: 'Yesterday at 08:15 PM'
-          }
-        ]
-      },
-      {
-        id: 'sophia',
-        phone: '+91 98765 0102',
-        email: 'sophia@love.com',
-        name: 'Sophia 💕',
-        pass: 'password123',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-        statusText: 'Love is a song that never ends 🎵',
-        songs: [
-          { id: 's3', title: 'Melody of Us', artist: 'Violin Romance', duration: '03:20' }
-        ],
-        linkedDevices: []
-      },
-      {
-        id: 'lucas',
-        phone: '+91 98765 0103',
-        email: 'lucas@love.com',
-        name: 'Lucas 🌹',
-        pass: 'password123',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-        statusText: 'Wishing you were here with me.',
-        songs: [],
-        linkedDevices: []
-      },
-      {
-        id: 'lily',
-        phone: '+91 98765 0104',
-        email: 'lily@love.com',
-        name: 'Lily ✨',
-        pass: 'password123',
-        avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
-        statusText: 'Lost in our sweet little dream world 💫',
-        songs: [],
-        linkedDevices: []
-      }
-    ];
-
-    defaultUsers.forEach(u => {
-      const key = u.phone.replace(/\s+/g, '').toLowerCase();
-      if (!users[key]) {
-        users[key] = u;
-        if (u.email) {
-          users[u.email.toLowerCase()] = u;
-        }
-        updated = true;
-      }
-    });
-
-    if (updated) {
-      localStorage.setItem('romantic_messenger_users', JSON.stringify(users));
-    }
+    // No demo users auto-inserted for production clean state
   }
 
   // --- Firebase Phone Auth Setup & Helpers ---
@@ -394,6 +312,186 @@ export class AuthService {
     // Automatically set current session
     this.createSession(newUser);
     return { success: true, message: 'Registration complete! Welcome to Romantic Messenger.' };
+  }
+
+  // --- Real Firebase Email & Password Registration ---
+  async registerWithEmail(
+    name: string,
+    email: string,
+    pass: string
+  ): Promise<{ success: boolean; message: string; user?: UserRecord }> {
+    const cleanName = (name || '').trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPass = (pass || '').trim();
+
+    if (!cleanName) {
+      return { success: false, message: 'Please enter your name.' };
+    }
+    if (!cleanEmail) {
+      return { success: false, message: 'Please enter a valid email address.' };
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return { success: false, message: 'Invalid email format. Please enter a valid email address.' };
+    }
+    if (!cleanPass) {
+      return { success: false, message: 'Password is required.' };
+    }
+
+    const users = this.getSavedUsers();
+    if (users[cleanEmail]) {
+      return { success: false, message: 'This email is already registered. Please log in instead.' };
+    }
+
+    try {
+      const userCredential: UserCredential = await createUserWithEmailAndPassword(this.firebaseAuth, cleanEmail, cleanPass);
+      const firebaseUser = userCredential.user;
+
+      try {
+        await sendEmailVerification(firebaseUser);
+      } catch (evErr) {
+        console.warn('Could not send verification email immediately:', evErr);
+      }
+
+      const userId = firebaseUser.uid;
+      const createdAt = new Date().toISOString();
+      const newUser: UserRecord = {
+        id: userId,
+        phone: '',
+        email: cleanEmail,
+        name: cleanName,
+        pass: cleanPass,
+        avatar: this.getDefaultAvatar(cleanName),
+        statusText: 'Living in a world of love & stars ✨',
+        songs: [
+          { id: 'song_1', title: 'Galactic Dreams', artist: 'Cosmic Hearts', duration: '03:50' }
+        ],
+        linkedDevices: [
+          {
+            id: 'dev_curr',
+            name: 'Web Browser Session',
+            platform: navigator.platform || 'Desktop Browser',
+            browser: 'Web Session',
+            location: 'Local Session',
+            lastActive: 'Active Now',
+            isCurrent: true,
+            loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ],
+        authType: 'email',
+        createdAt: createdAt
+      };
+
+      users[cleanEmail] = newUser;
+      users[userId] = newUser;
+      localStorage.setItem('romantic_messenger_users', JSON.stringify(users));
+
+      this.http.post<any>(`${this.apiUrl}/register`, {
+        name: cleanName,
+        email: cleanEmail,
+        password: cleanPass,
+        authType: 'email',
+        uid: userId,
+        createdAt: createdAt
+      }, {
+        headers: { 'X-Secret-Key': '050605' }
+      }).subscribe({
+        next: (res) => console.log('Registered email user saved on backend:', res),
+        error: (err) => console.log('Backend email registration notice:', err?.error?.message || err.message)
+      });
+
+      return {
+        success: true,
+        message: `Registration successful! Verification link sent to ${cleanEmail}. Please verify your email before logging in.`,
+        user: newUser
+      };
+    } catch (error: any) {
+      console.error('Firebase email registration error:', error);
+      let msg = 'Email registration failed. Please try again.';
+      if (error.code === 'auth/email-already-in-use') {
+        msg = 'This email is already registered. Please log in instead.';
+      } else if (error.code === 'auth/invalid-email') {
+        msg = 'Invalid email address format.';
+      } else if (error.code === 'auth/weak-password') {
+        msg = 'Password is too weak. Please use at least 6 characters.';
+      } else if (error.message) {
+        msg = error.message;
+      }
+      return { success: false, message: msg };
+    }
+  }
+
+  // --- Real Firebase Email & Password Login ---
+  async loginWithEmail(email: string, pass: string): Promise<{ success: boolean; message: string; requiresVerification?: boolean }> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPass = (pass || '').trim();
+
+    if (!cleanEmail || !cleanPass) {
+      return { success: false, message: 'Email address and password are required.' };
+    }
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(this.firebaseAuth, cleanEmail, cleanPass);
+      const firebaseUser = userCredential.user;
+      const idToken = await firebaseUser.getIdToken();
+
+      if (!firebaseUser.emailVerified) {
+        try {
+          await sendEmailVerification(firebaseUser);
+        } catch (e) {}
+        return {
+          success: false,
+          requiresVerification: true,
+          message: `Please verify your email address (${cleanEmail}) before logging in. A new verification link has been sent.`
+        };
+      }
+
+      const users = this.getSavedUsers();
+      let user = users[cleanEmail] || users[firebaseUser.uid];
+
+      if (!user) {
+        user = {
+          id: firebaseUser.uid,
+          phone: '',
+          email: cleanEmail,
+          name: firebaseUser.displayName || cleanEmail.split('@')[0],
+          avatar: this.getDefaultAvatar(cleanEmail),
+          statusText: 'Online 💖',
+          songs: [],
+          linkedDevices: [],
+          authType: 'email',
+          createdAt: new Date().toISOString()
+        };
+        users[cleanEmail] = user;
+        users[firebaseUser.uid] = user;
+        localStorage.setItem('romantic_messenger_users', JSON.stringify(users));
+      }
+
+      this.createSession(user, idToken);
+      return { success: true, message: 'Login successful!' };
+    } catch (error: any) {
+      console.error('Firebase email login error:', error);
+      const users = this.getSavedUsers();
+      const localUser = users[cleanEmail];
+      if (localUser && localUser.pass === cleanPass) {
+        this.createSession(localUser);
+        return { success: true, message: 'Login successful!' };
+      }
+
+      let msg = 'Invalid email address or password.';
+      if (
+        error.code === 'auth/user-not-found' ||
+        error.code === 'auth/wrong-password' ||
+        error.code === 'auth/invalid-credential'
+      ) {
+        msg = 'Invalid email address or password.';
+      } else if (error.code === 'auth/invalid-email') {
+        msg = 'Invalid email address format.';
+      } else if (error.message) {
+        msg = error.message;
+      }
+      return { success: false, message: msg };
+    }
   }
 
   // --- Real Firebase OTP Login ---

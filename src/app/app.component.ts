@@ -171,12 +171,21 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly WRONG_SECRET_MSG = 'Hmm, that doesn,t feel like love. Try again 💔';
 
   // Form Fields - Register
+  registerSubMode: 'phone' | 'email' = 'phone'; // default to Phone registration
   registerStep: 1 | 2 | 3 = 1; // 1: Phone & Name, 2: OTP verification, 3: Email & Password
   registerPhone = '';
   registerName = '';
   registerOtp = '';
   registerEmail = '';
   registerPassword = '';
+
+  // Form Fields - Email Register
+  regEmailName = '';
+  regEmailAddress = '';
+  regEmailPassword = '';
+  regEmailConfirmPassword = '';
+  showRegEmailPassword = false;
+  showRegEmailConfirmPassword = false;
 
   // Country Flags & Dial Codes State
   countryCodes = COUNTRY_CODES;
@@ -324,6 +333,11 @@ export class AppComponent implements OnInit, OnDestroy {
     this.clearMessages();
   }
 
+  switchRegisterSubMode(mode: 'phone' | 'email'): void {
+    this.registerSubMode = mode;
+    this.clearMessages();
+  }
+
   private validateSecretCode(code: string): boolean {
     if ((code || '').trim() !== this.SECRET_CODE) {
       this.secretCodeError = this.WRONG_SECRET_MSG;
@@ -448,11 +462,62 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  // --- Standard Email Login ---
-  onLogin(): void {
+  // --- Real Firebase Email Registration Handler ---
+  async onRegisterWithEmail(): Promise<void> {
     this.clearMessages();
-    if (!this.validateSecretCode(this.loginSecretCode)) return;
-    const result = this.authService.login(this.loginEmail, this.loginPassword);
+    if (!this.regEmailName || !this.regEmailName.trim()) {
+      this.errorMessage = 'Please enter your name.';
+      return;
+    }
+    if (!this.regEmailAddress || !this.regEmailAddress.trim()) {
+      this.errorMessage = 'Please enter your email address.';
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(this.regEmailAddress.trim())) {
+      this.errorMessage = 'Please enter a valid email address.';
+      return;
+    }
+    if (!this.regEmailPassword) {
+      this.errorMessage = 'Password is required.';
+      return;
+    }
+    if (this.regEmailPassword !== this.regEmailConfirmPassword) {
+      this.errorMessage = 'Confirm Password must match Password.';
+      return;
+    }
+
+    const result = await this.authService.registerWithEmail(
+      this.regEmailName,
+      this.regEmailAddress,
+      this.regEmailPassword
+    );
+
+    if (result.success) {
+      this.successMessage = result.message;
+      const registeredEmail = this.regEmailAddress;
+      this.clearFormFields();
+      this.isLoginMode = true;
+      this.loginSubMode = 'email';
+      this.loginEmail = registeredEmail;
+    } else {
+      this.errorMessage = result.message;
+    }
+  }
+
+  // --- Standard Email Login ---
+  async onLogin(): Promise<void> {
+    this.clearMessages();
+    if (!this.loginEmail || !this.loginEmail.trim()) {
+      this.errorMessage = 'Please enter your email address.';
+      return;
+    }
+    if (!this.loginPassword) {
+      this.errorMessage = 'Please enter your password.';
+      return;
+    }
+
+    const result = await this.authService.loginWithEmail(this.loginEmail, this.loginPassword);
 
     if (result.success) {
       this.isLoggedIn = true;
@@ -484,6 +549,12 @@ export class AppComponent implements OnInit, OnDestroy {
     this.registerEmail = '';
     this.registerOtp = '';
     this.registerSecretCode = '';
+    this.regEmailName = '';
+    this.regEmailAddress = '';
+    this.regEmailPassword = '';
+    this.regEmailConfirmPassword = '';
+    this.showRegEmailPassword = false;
+    this.showRegEmailConfirmPassword = false;
     this.secretCodeError = '';
     this.registerStep = 1;
     this.loginOtpSent = false;

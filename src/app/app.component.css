@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Outfit:wght@600;700;800&family=Inter:wght@400;500;600&family=Satisfy&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Satisfy&display=swap');
 
 /* Global Italic Watermark / Placeholder Styling */
 ::placeholder {
@@ -19,6 +20,19 @@
 
 :-ms-input-placeholder {
   font-style: italic !important;
+}
+
+/* Cursive/handwritten font ONLY for text inside all buttons */
+button,
+.auth-subtabs button,
+.btn-inline-send,
+.btn-resend-otp,
+.country-picker-btn,
+.btn-53,
+.btn-53 .original,
+.btn-53 .letters,
+.btn-53 span {
+  font-family: 'Satisfy', 'Dancing Script', cursive !important;
 }
 
 
@@ -65,8 +79,9 @@ app-galaxy {
   right: 0;
   bottom: 0;
   width: 100vw;
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -74,6 +89,8 @@ app-galaxy {
   padding: max(16px, calc(12px + var(--sat))) max(16px, calc(12px + var(--sar))) max(16px, calc(12px + var(--sab))) max(16px, calc(12px + var(--sal)));
   box-sizing: border-box;
   overflow: hidden;
+  overflow-x: hidden;
+  touch-action: none;
 }
 
 .auth-card-container::-webkit-scrollbar,
@@ -106,25 +123,36 @@ app-galaxy {
   font-family: 'Inter', sans-serif;
   display: flex;
   flex-direction: column;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .auth-card-body {
   width: 100%;
   height: 100%;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  max-height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
   padding: 24px 18px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain;
   z-index: 1;
   scrollbar-width: thin;
   scrollbar-color: #000000 transparent;
+}
+
+.auth-header,
+.auth-section,
+.auth-form,
+.auth-footer {
+  flex-shrink: 0;
 }
 
 .auth-card-body::-webkit-scrollbar {
@@ -240,6 +268,7 @@ app-galaxy {
   flex-direction: column;
   align-items: center;
   margin-bottom: 12px;
+  pointer-events: none;
 }
 
 /* Shiny Text Animation Effect */
@@ -1098,52 +1127,89 @@ app-galaxy {
   width: min(92vw, 360px);
   max-width: 360px;
   height: min(580px, calc(100dvh - var(--sat) - var(--sab) - 24px));
+  max-height: calc(100dvh - var(--sat) - var(--sab) - 16px);
   perspective: 1000px;
   margin: auto;
   flex-shrink: 0;
   overflow: hidden;
+  border-radius: 20px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .card-inner {
   width: 100%;
   height: 100%;
   position: relative;
-  transform-style: preserve-3d;
   transition: transform 0.999s cubic-bezier(0.4, 0, 0.2, 1);
-  /* Start showing the BACK side */
-  transform: rotateY(180deg);
 }
 
-/* Hover & Focus-Within flips to FRONT side (Touch finger-swiping inside card-body won't flip card) */
-.card:hover .card-inner,
-.card:focus-within .card-inner {
-  transform: rotateY(0deg);
+/* Desktop Hover & Focus-Within flips to FRONT side */
+@media (hover: hover) and (pointer: fine) {
+  .card-inner {
+    transform-style: preserve-3d;
+    transform: rotateY(180deg);
+  }
+
+  .card:hover .card-inner,
+  .card:focus-within .card-inner {
+    transform: rotateY(0deg);
+    transform-style: flat;
+  }
+
+  .card-front,
+  .card-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    overflow: hidden;
+    border-radius: 20px;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .card-front {
+    transform: rotateY(0deg);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-back {
+    transform: rotateY(180deg);
+    padding: 0 !important;
+    overflow: hidden;
+    border-radius: 20px;
+    background: rgba(10, 8, 22, 0.95);
+  }
 }
 
-.card-front,
-.card-back {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  overflow: hidden;
-}
+/* Mobile, Tablet & Touch Viewports (DevTools device mode, Android, iOS) */
+@media (hover: none), (pointer: coarse), (max-width: 768px) {
+  .card-inner {
+    transform: none !important;
+    transform-style: flat !important;
+  }
 
-.card-front {
-  transform: rotateY(0deg);
-  display: flex;
-  flex-direction: column;
-}
+  .card-front {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    transform: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border-radius: 20px !important;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
 
-.card-back {
-  transform: rotateY(180deg);
-  padding: 0 !important;
-  overflow: hidden;
-  border-radius: 20px;
-  background: rgba(10, 8, 22, 0.95);
+  .card-back {
+    display: none !important;
+  }
 }
 
 .card-back-image-wrapper {

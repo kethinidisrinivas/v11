@@ -13,15 +13,30 @@ export class ContactService {
   }
 
   getContactById(contactId: string): Contact | undefined {
-    return this.messengerService.getContactById(contactId);
+    return this.messengerService.getContacts().find(c => c.id === contactId);
   }
 
   addContact(name: string, phone: string, about?: string): Contact {
-    return this.messengerService.addContact(name, phone, about);
+    const res = this.messengerService.saveContact({ name, phone, about });
+    if (res.contact) return res.contact;
+    return {
+      id: 'c_' + Date.now(),
+      name,
+      phone,
+      about,
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop&crop=face',
+      statusText: 'Active',
+      isOnline: false,
+      unreadCount: 0
+    };
   }
 
   toggleFavorite(contactId: string): void {
-    this.messengerService.toggleFavorite(contactId);
+    const contact = this.messengerService.getContacts().find(c => c.id === contactId);
+    if (contact) {
+      contact.isFavorite = !contact.isFavorite;
+      this.messengerService.saveContactsToStorage();
+    }
   }
 
   getSharedMedia(contactId: string): SharedMedia {
